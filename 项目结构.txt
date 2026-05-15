@@ -1,0 +1,148 @@
+# Video App — 项目规划与准备清单
+
+> ✅ = 已完成   ⏳ = 待实现
+
+---
+
+## 1. 开发环境（本机安装）
+
+| 工具 / 软件 | 作用 | 说明 |
+|---|---|---|
+| Node.js (≥18) | 后端运行环境，NestJS 依赖 | 已装 |
+| pnpm | 包管理器 | 已装 |
+| Docker Desktop | 本地启动 PostgreSQL、Redis、MinIO | 已装 |
+| Flutter SDK | 移动端开发 | 已装 |
+| Android Studio / Xcode | Flutter 构建工具链 | 按需安装 |
+| VS Code | IDE | 推荐搭配扩展：Prettier, Docker, Flutter, Dart |
+| FFmpeg | 后端转码 Worker 核心工具 | ⏳ 待安装或构建在 Docker 镜像中 |
+| Postman / Insomnia | 调试 API | 任选 |
+
+## 2. 第三方账号与服务
+
+| 服务 | 用途 | 状态 |
+|---|---|---|
+| 阿里云内容安全 / 腾讯云天御 | 视频/图片/文字机审 | ⏳ 需要时再注册 |
+| MinIO | 自建对象存储 | ✅ Docker 已配置 |
+
+## 3. 项目工程状态 ✅
+
+以下均已搭建完成：
+
+| 项 | 说明 |
+|---|---|
+| NestJS 后端 | `backend/`，NestJS 11 + TypeScript |
+| Flutter 前端 | `frontend/`，Dart SDK ^3.11.5（目前为默认模板） |
+| Docker Compose | PostgreSQL 15 + Redis 7 + MinIO |
+| `.env` 配置 | DB、Redis、MinIO、JWT 密钥 |
+| 后端模块 | TypeORM (PostgreSQL)、RedisModule、MinioModule 已接入 |
+| ESLint + Prettier | `eslint.config.mjs` + `.prettierrc` 已配置 |
+| Jest 测试 | 单元测试 (`*.spec.ts`) + e2e (`test/`) 已配置 |
+
+### 已有后端依赖（已安装）
+
+- `@nestjs/core/common/platform-express/config`
+- `@nestjs/typeorm` + `typeorm` + `pg`
+- `@nestjs/jwt` + `@nestjs/passport` + `passport-jwt` + `bcryptjs`
+- `@nestjs/bull` + `bull`
+- `minio`
+- `redis` v5（官方包，非 ioredis）
+- `multer`
+- `class-validator` + `class-transformer`
+- `@nestjs/swagger` + `swagger-ui-express`
+- `axios`
+- `uuid`
+- `@nestjs/testing` + `supertest`（dev）
+
+## 4. 功能模块（按优先级）
+
+### 模块一：视频上传及存储 ⏳
+**功能**：客户端选视频，分片上传，后端存 MinIO，触发转码
+
+| 端 | 依赖 | 状态 |
+|---|---|---|
+| 后端 | `multer`（已装），`minio`（已装），`@nestjs/bull` + `bull`（已装），`uuid`（已装） | 待实现控制器和服务 |
+| 前端 | `image_picker` / `wechat_assets_picker`，`dio` | ⏳ 待加入 pubspec.yaml |
+| 额外 | FFmpeg（转码 Worker） | ⏳ 待安装 |
+
+### 模块二：简单推荐和分发 ⏳
+**功能**：首页 Feed，热度+时间衰减排序，标签加权
+
+- Redis ZSET 缓存热门视频（`redis` 包已装）
+- `@nestjs/bull` 定时更新热度（已装）
+
+### 模块三：基础互动体系 ⏳
+**功能**：点赞、评论、关注/取消
+
+- 纯数据库操作，无特殊库需求
+- Redis 可选用于点赞计数
+
+### 模块四：用户主页 ⏳
+**功能**：用户信息、视频列表、粉丝关注数
+
+- TypeORM 关联查询 + 聚合统计
+
+### 模块五：基础搜索 ⏳
+**功能**：关键词搜索视频
+
+- PostgreSQL 全文搜索（tsvector + 索引）
+- 后期可迁至 Elasticsearch
+
+### 模块六：简洁版播放界面 ⏳
+**功能**：上下滑切换，全屏播放，预加载
+
+| 端 | 依赖 | 状态 |
+|---|---|---|
+| 前端 | `video_player` + `chewie`，`cached_network_image` | ⏳ 待加入 pubspec.yaml |
+| 后端 | MinIO 签名 URL 复用模块一 | 待实现 |
+
+### 模块七：简洁版账号体系 ✅（依赖已装，逻辑待实现）
+**功能**：注册、登录、JWT 鉴权、Token 刷新
+
+| 端 | 依赖 | 状态 |
+|---|---|---|
+| 后端 | `@nestjs/passport` `passport` `passport-jwt` `@nestjs/jwt` `bcryptjs` | ✅ 已装，待实现控制器 |
+| 后端 | `class-validator` `class-transformer`（DTO 校验） | ✅ 已装 |
+| 前端 | `dio` / `http`，`shared_preferences` / `flutter_secure_storage` | ⏳ 待加入 |
+
+### 模块八：基础内容审核 ⏳
+**功能**：上传后机审 → 人工审核队列 → 管理后台
+
+- 阿里云/腾讯云内容安全 API（HTTP 调用，无需专用 SDK）
+- `@nestjs/bull` 异步审核队列（已装）
+- 管理后台可先用 Swagger 文档
+
+## 5. 完整依赖速查
+
+### 后端（已安装）
+
+| 类别 | 包名 | 模块 |
+|---|---|---|
+| 框架 | `@nestjs/core` `@nestjs/common` `@nestjs/platform-express` | 全局 |
+| 数据库 | `@nestjs/typeorm` `typeorm` `pg` | 全部 |
+| 缓存/队列 | `redis` `@nestjs/bull` `bull` | 上传、审核、推荐 |
+| 认证 | `@nestjs/jwt` `@nestjs/passport` `passport-jwt` `bcryptjs` | 账号体系 |
+| 存储 | `minio` | 上传、播放 |
+| 文件 | `multer` | 上传 |
+| 校验 | `class-validator` `class-transformer` | 全局 |
+| API 文档 | `@nestjs/swagger` `swagger-ui-express` | 全局 |
+| HTTP | `axios` | 审核、外部请求 |
+| 工具 | `uuid` `@nestjs/config` | 全局 |
+
+### 前端（待加入 pubspec.yaml）
+
+| 包名 | 用途 | 模块 |
+|---|---|---|
+| `dio` | 网络请求 | 全部 |
+| `image_picker` | 选取/拍摄视频 | 上传 |
+| `video_player` | 视频播放 | 播放界面 |
+| `chewie` | 播放控制 UI | 播放界面 |
+| `cached_network_image` | 封面/头像缓存 | 播放、主页 |
+| `shared_preferences` / `flutter_secure_storage` | Token 本地存储 | 账号 |
+| `provider` / `riverpod` | 状态管理 | 全局 |
+
+## 6. 需要提前具备的知识
+
+- TypeScript 基础，NestJS 控制器/提供者/模块
+- Flutter 基本 widget、状态管理
+- Docker 基本命令
+- 关系型数据库基础（SQL、TypeORM）

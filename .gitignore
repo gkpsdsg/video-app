@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+backend/node_modules/
+frontend/.pub-cache/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+backend/dist/
+frontend/build/
+frontend/.dart_tool/
+
+# Android
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/android/gradle/wrapper/gradle-wrapper.jar
+
+# iOS
+frontend/ios/Pods/
+frontend/ios/.symlinks/
+frontend/ios/Flutter/ephemeral/
+frontend/ios/Flutter/Flutter.framework
+frontend/ios/Flutter/Flutter.podspec
+frontend/ios/Runner/GeneratedPluginRegistrant.*
+
+# macOS
+frontend/macos/Flutter/ephemeral/
+frontend/macos/Pods/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test coverage
+/coverage/
+/.nyc_output/
+
+# Temp
+.temp/
+.tmp/
