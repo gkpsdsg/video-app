@@ -50,8 +50,10 @@ export class AppController {
 
   @Get('test/all')
   async testAll() {
-    const redisTest = await this.testRedis();
-    const minioTest = await this.testMinio();
+    const [redisTest, minioTest] = await Promise.all([
+      this.testRedis(),
+      this.testMinio(),
+    ]);
 
     return {
       redis: redisTest,

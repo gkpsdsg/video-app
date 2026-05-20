@@ -1,4 +1,5 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
 
 @Injectable()
@@ -6,21 +7,20 @@ export class MinioService implements OnModuleInit {
   private minioClient: Minio.Client;
   private readonly bucketName: string;
 
-  constructor() {
-    this.bucketName = process.env.MINIO_BUCKET || 'video-app';
+  constructor(private configService: ConfigService) {
+    this.bucketName = configService.get<string>('MINIO_BUCKET') || 'video-app';
   }
 
   onModuleInit() {
-    const endPoint = process.env.MINIO_ENDPOINT || 'localhost';
-    const port = parseInt(process.env.MINIO_PORT || '9000', 10);
-    const useSSL = false;
-    const accessKey = process.env.MINIO_ACCESS_KEY || 'minioadmin';
-    const secretKey = process.env.MINIO_SECRET_KEY || 'minioadmin';
+    const endPoint = this.configService.get<string>('MINIO_ENDPOINT') || 'localhost';
+    const port = this.configService.get<number>('MINIO_PORT') || 9000;
+    const accessKey = this.configService.get<string>('MINIO_ACCESS_KEY') || 'minioadmin';
+    const secretKey = this.configService.get<string>('MINIO_SECRET_KEY') || 'minioadmin';
 
     this.minioClient = new Minio.Client({
       endPoint,
       port,
-      useSSL,
+      useSSL: false,
       accessKey,
       secretKey,
     });
@@ -49,7 +49,6 @@ export class MinioService implements OnModuleInit {
         success: true,
         buckets: buckets.map((b) => b.name),
         defaultBucket: this.bucketName,
-        bucketExists: await this.minioClient.bucketExists(this.bucketName),
       };
     } catch (error) {
       const err = error as Error;
@@ -61,8 +60,6 @@ export class MinioService implements OnModuleInit {
   }
 
   async uploadFile(buffer: Buffer, fileName: string, mimeType: string) {
-    // 修复：putObject 参数为 (bucket, name, stream, size, metaData)
-    // 这里使用 buffer，需要指定大小和 metaData
     await this.minioClient.putObject(
       this.bucketName,
       fileName,
