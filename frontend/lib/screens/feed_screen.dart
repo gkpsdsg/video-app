@@ -3,18 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import '../services/api_service.dart';
 import '../widgets/shimmer_box.dart';
+import '../widgets/douyin_top_bar.dart';
+import '../widgets/douyin_action_bar.dart';
+import '../widgets/heart_burst.dart';
 
-// ── OLED Dark tokens (mirrored from main.dart for self-contained screen) ──
-const _black = Color(0xFF000000);
-const _surface1 = Color(0xFF0C0C0C);
-const _surface2 = Color(0xFF1A1A1A);
-const _surface3 = Color(0xFF262626);
-const _violet500 = Color(0xFF8B5CF6);
-const _violet400 = Color(0xFFA78BFA);
-const _violet300 = Color(0xFFC4B5FD);
-const _rose = Color(0xFFFB7185);
-const _textMuted = Color(0xFF71717A);
-const _textSecondary = Color(0xFFA1A1AA);
+const _red = Color(0xFFFE2C55);
+const _dkS1 = Color(0xFF111111);
+const _dkS2 = Color(0xFF161616);
+const _dkBorder = Color(0xFF2A2A2A);
+const _textMuted = Color(0xFF8A8A8A);
+const _textSecondary = Color(0xFFB0B0B0);
 
 class VideoItem {
   final String id;
@@ -50,6 +48,9 @@ class _FeedScreenState extends State<FeedScreen> {
   String? _loadError;
   bool _isPlaying = true;
   final Map<String, GlobalKey<_VideoPlayerWidgetState>> _videoKeys = {};
+
+  // Top bar state
+  int _feedTabIndex = 1; // 0=关注, 1=推荐
 
   @override
   void initState() {
@@ -89,23 +90,9 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  void _goToPrevious() {
-    HapticFeedback.lightImpact();
-    if (_currentPage > 0) {
-      final dur = MediaQuery.of(context).disableAnimations
-          ? Duration.zero
-          : const Duration(milliseconds: 300);
-      _pageController.previousPage(duration: dur, curve: Curves.easeInOut);
-    }
-  }
-
-  void _goToNext() {
-    HapticFeedback.lightImpact();
-    if (_currentPage < _videos.length - 1) {
-      final dur = MediaQuery.of(context).disableAnimations
-          ? Duration.zero
-          : const Duration(milliseconds: 300);
-      _pageController.nextPage(duration: dur, curve: Curves.easeInOut);
+  void _onPlayPauseChanged(bool isPlaying) {
+    if (_isPlaying != isPlaying) {
+      setState(() => _isPlaying = isPlaying);
     }
   }
 
@@ -115,12 +102,6 @@ class _FeedScreenState extends State<FeedScreen> {
     if (_videos.isEmpty) return;
     final key = _videoKeys[_videos[_currentPage].id];
     key?.currentState?.togglePlayPause();
-  }
-
-  void _onPlayPauseChanged(bool isPlaying) {
-    if (_isPlaying != isPlaying) {
-      setState(() => _isPlaying = isPlaying);
-    }
   }
 
   @override
@@ -170,6 +151,7 @@ class _FeedScreenState extends State<FeedScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          // Video pages
           PageView.builder(
             controller: _pageController,
             scrollDirection: Axis.vertical,
@@ -186,6 +168,16 @@ class _FeedScreenState extends State<FeedScreen> {
                 onPlayPauseChanged: _onPlayPauseChanged,
               );
             },
+          ),
+          // Top bar overlay
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: DouyinTopBar(
+              activeIndex: _feedTabIndex,
+              onTabChanged: (i) => setState(() => _feedTabIndex = i),
+              onSearch: () {},
+              onLive: () {},
+            ),
           ),
           // Bottom control bar
           Positioned(
@@ -210,35 +202,39 @@ class _FeedScreenState extends State<FeedScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _CapsuleButton(icon: Icons.skip_previous, label: '上一条', onTap: _goToPrevious),
+          _CapsuleButton(icon: Icons.skip_previous, label: '上一条', onTap: () {
+            if (_currentPage > 0) {
+              HapticFeedback.lightImpact();
+              _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+            }
+          }),
           const SizedBox(width: 28),
-          Semantics(
-            button: true,
-            label: _isPlaying ? '暂停' : '播放',
-            child: GestureDetector(
-              onTap: _togglePlayPause,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 48, height: 48,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.12),
-                  border: Border.all(color: Colors.white10, width: 0.5),
-                ),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    _isPlaying ? Icons.pause : Icons.play_arrow,
-                    key: ValueKey(_isPlaying),
-                    color: Colors.white,
-                    size: 22,
-                  ),
+          GestureDetector(
+            onTap: _togglePlayPause,
+            child: Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.white10, width: 0.5),
+              ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: Icon(
+                  _isPlaying ? Icons.pause : Icons.play_arrow,
+                  key: ValueKey(_isPlaying),
+                  color: Colors.white, size: 24,
                 ),
               ),
             ),
           ),
           const SizedBox(width: 28),
-          _CapsuleButton(icon: Icons.skip_next, label: '下一条', onTap: _goToNext),
+          _CapsuleButton(icon: Icons.skip_next, label: '下一条', onTap: () {
+            if (_currentPage < _videos.length - 1) {
+              HapticFeedback.lightImpact();
+              _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+            }
+          }),
         ],
       ),
     );
@@ -274,6 +270,8 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
   late int _likeCount;
   late int _commentCount;
   bool _likeLoading = false;
+  bool _isMuted = true;
+  Widget? _heartBurst;
 
   @override
   void initState() {
@@ -337,6 +335,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     }
 
     controller.setLooping(true);
+    controller.setVolume(_isMuted ? 0 : 1);
     _fetching = false;
     if (mounted) {
       setState(() {});
@@ -359,7 +358,42 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     await _initVideo();
   }
 
-  Future<void> _toggleLike() async {
+  void _handleDoubleTap() {
+    HapticFeedback.mediumImpact();
+    if (!_isLiked) {
+      setState(() {
+        _isLiked = true;
+        _likeCount += 1;
+        _heartBurst = const HeartBurst();
+      });
+      // Send like to server
+      _likeLoading = true;
+      ApiService().dio.post('/like/${widget.video.id}').then((res) {
+        if (mounted) setState(() => _isLiked = res.data['liked'] == true);
+        _likeLoading = false;
+      }).catchError((_) {
+        _likeLoading = false;
+      });
+    }
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _heartBurst = null);
+    });
+  }
+
+  void _handleTap() {
+    HapticFeedback.lightImpact();
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    if (c.value.isPlaying) {
+      c.pause();
+      widget.onPlayPauseChanged(false);
+    } else {
+      c.play();
+      widget.onPlayPauseChanged(true);
+    }
+  }
+
+  void _toggleLike() {
     if (_likeLoading) return;
     HapticFeedback.lightImpact();
     _likeLoading = true;
@@ -370,12 +404,10 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
       _likeCount += _isLiked ? 1 : -1;
     });
 
-    try {
-      final res = await ApiService().dio.post('/like/${widget.video.id}');
-      if (mounted) {
-        setState(() => _isLiked = res.data['liked'] == true);
-      }
-    } catch (_) {
+    ApiService().dio.post('/like/${widget.video.id}').then((res) {
+      if (mounted) setState(() => _isLiked = res.data['liked'] == true);
+      _likeLoading = false;
+    }).catchError((_) {
       if (mounted) {
         setState(() {
           _isLiked = wasLiked;
@@ -385,9 +417,16 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
           const SnackBar(content: Text('操作失败，请重试'), behavior: SnackBarBehavior.floating),
         );
       }
-    } finally {
       _likeLoading = false;
-    }
+    });
+  }
+
+  void _toggleMute() {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _isMuted = !_isMuted;
+      _controller?.setVolume(_isMuted ? 0 : 1);
+    });
   }
 
   Future<List<Map<String, dynamic>>> _fetchComments() async {
@@ -404,7 +443,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     HapticFeedback.lightImpact();
     final textController = TextEditingController();
     final api = ApiService();
-
+    // ignore: use_build_context_synchronously
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -419,7 +458,6 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
         },
       ),
     );
-
     textController.dispose();
   }
 
@@ -451,31 +489,22 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     final authorInitial = authorName.isNotEmpty ? authorName.characters.first.toUpperCase() : '?';
 
     return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        final c = _controller;
-        if (c == null || !c.value.isInitialized) return;
-        if (c.value.isPlaying) {
-          c.pause();
-          widget.onPlayPauseChanged(false);
-        } else {
-          c.play();
-          widget.onPlayPauseChanged(true);
-        }
-      },
+      onDoubleTap: _handleDoubleTap,
+      onTap: _handleTap,
+      behavior: HitTestBehavior.opaque,
       child: RepaintBoundary(
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Video or black background
+            // Video or black bg
             if (hasVideo)
               VideoPlayer(_controller!)
             else
-              Container(color: _black),
+              Container(color: Colors.black),
 
-            // Top vignette
+            // Top gradient
             const Positioned(
-              top: 0, left: 0, right: 0, height: 140,
+              top: 0, left: 0, right: 0, height: 160,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -487,9 +516,9 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
               ),
             ),
 
-            // Bottom vignette
+            // Bottom gradient
             const Positioned(
-              bottom: 0, left: 0, right: 0, height: 200,
+              bottom: 0, left: 0, right: 0, height: 260,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -501,7 +530,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
               ),
             ),
 
-            // Loading / error states
+            // Loading / error
             if (!hasVideo)
               Center(
                 child: _loadFailed
@@ -518,7 +547,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
                     : const CircularProgressIndicator(color: Colors.white38),
               ),
 
-            // Play/pause overlay icon
+            // Play overlay
             AnimatedOpacity(
               opacity: (hasVideo && !_controller!.value.isPlaying) ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 200),
@@ -529,7 +558,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
                     width: 68, height: 68,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.12),
+                      color: Colors.white.withValues(alpha: 0.1),
                     ),
                     child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 44),
                   ),
@@ -537,54 +566,57 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
               ),
             ),
 
-            // Author & title area
+            // Mute toggle (top-right)
+            if (hasVideo)
+              Positioned(
+                top: 120, right: 16,
+                child: GestureDetector(
+                  onTap: _toggleMute,
+                  child: Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black54,
+                    ),
+                    child: Icon(
+                      _isMuted ? Icons.volume_off : Icons.volume_up,
+                      color: Colors.white70, size: 18,
+                    ),
+                  ),
+                ),
+              ),
+
+            // Heart burst
+            if (_heartBurst != null)
+              const Center(child: HeartBurst()),
+
+            // Bottom-left video info
             Positioned(
-              bottom: 90, left: 16, right: 90,
+              bottom: 90, left: 14, right: 90,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     children: [
-                      Container(
-                        width: 40, height: 40,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white24, width: 1.5),
-                          gradient: const LinearGradient(
-                            colors: [_violet500, Color(0xFFA855F7)],
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(authorInitial,
-                              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(authorName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
-                          const SizedBox(height: 2),
-                          Text('@${(video.author['username'] ?? '').toString()}',
-                              style: const TextStyle(color: _textSecondary, fontSize: 11)),
-                        ],
+                      Flexible(
+                        child: Text('@${(video.author['username'] ?? '').toString()}',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
                       ),
                       const SizedBox(width: 10),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                         decoration: BoxDecoration(
-                          border: Border.all(color: _violet400.withValues(alpha: 0.5)),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _red, width: 1),
                         ),
-                        child: const Text('关注', style: TextStyle(color: _violet300, fontSize: 11, fontWeight: FontWeight.w600)),
+                        child: const Text('关注', style: TextStyle(color: _red, fontSize: 11, fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Text(video.title,
-                      style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.5),
+                      style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
                       maxLines: 2, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 6),
                   Row(
@@ -598,62 +630,33 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
               ),
             ),
 
-            // Right-side action buttons
+            // Right action bar
             Positioned(
-              bottom: 100, right: 12,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ActionButton(
-                    icon: _isLiked ? Icons.favorite : Icons.favorite_border,
-                    label: _formatCount(_likeCount),
-                    active: _isLiked,
-                    activeColor: _rose,
-                    onTap: _toggleLike,
-                  ),
-                  const SizedBox(height: 16),
-                  _ActionButton(
-                    icon: Icons.chat_bubble_outline_rounded,
-                    label: _formatCount(_commentCount),
-                    onTap: _showCommentSheet,
-                  ),
-                  const SizedBox(height: 16),
-                  const _ActionButton(
-                    icon: Icons.bookmark_border,
-                    label: '收藏',
-                    onTap: null,
-                  ),
-                  const SizedBox(height: 16),
-                  _ActionButton(
-                    icon: Icons.share,
-                    label: '分享',
-                    onTap: _share,
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    width: 44, height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.08),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(22),
-                      child: Image.network(
-                        video.author['avatar'] ?? '',
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, err, stack) => const Icon(Icons.disc_full, color: _violet400, size: 22),
-                      ),
-                    ),
-                  ),
-                ],
+              bottom: 100, right: 10,
+              child: DouyinActionBar(
+                isLiked: _isLiked,
+                likeCount: _likeCount,
+                commentCount: _commentCount,
+                bookmarkCount: 0,
+                shareCount: 0,
+                authorAvatar: video.author['avatar']?.toString() ?? '',
+                authorInitial: authorInitial,
+                onLike: _toggleLike,
+                onComment: _showCommentSheet,
+                onBookmark: () {
+                  HapticFeedback.lightImpact();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('已收藏'), behavior: SnackBarBehavior.floating),
+                  );
+                },
+                onShare: _share,
               ),
             ),
 
             // Progress bar
             if (hasVideo)
               Positioned(
-                bottom: 76, left: 12, right: 76,
+                bottom: 76, left: 8, right: 74,
                 child: _VideoProgress(controller: _controller!),
               ),
           ],
@@ -661,75 +664,9 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
       ),
     );
   }
-
-  String _formatCount(int n) {
-    if (n >= 10000) return '${(n / 10000).toStringAsFixed(1)}万';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
-    return n.toString();
-  }
 }
 
-// ── Right-side action button ──
-
-class _ActionButton extends StatefulWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final bool active;
-  final Color activeColor;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    this.onTap,
-    this.active = false,
-    this.activeColor = Colors.white,
-  });
-
-  @override
-  State<_ActionButton> createState() => _ActionButtonState();
-}
-
-class _ActionButtonState extends State<_ActionButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = widget.active ? widget.activeColor : Colors.white;
-    return Semantics(
-      button: widget.onTap != null,
-      label: widget.label,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        onTapDown: widget.onTap != null ? (_) => setState(() => _pressed = true) : null,
-        onTapUp: widget.onTap != null ? (_) => setState(() => _pressed = false) : null,
-        onTapCancel: widget.onTap != null ? () => setState(() => _pressed = false) : null,
-        child: AnimatedScale(
-          scale: _pressed ? 0.88 : 1.0,
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          child: Column(
-            children: [
-              Container(
-                width: 48, height: 48,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: _pressed ? 0.2 : 0.08),
-                ),
-                child: Icon(widget.icon, color: color, size: 26),
-              ),
-              const SizedBox(height: 4),
-              Text(widget.label,
-                  style: TextStyle(color: color.withValues(alpha: 0.85), fontSize: 11, fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Video progress bar ──
+// ── Progress bar ──
 
 class _VideoProgress extends StatefulWidget {
   final VideoPlayerController controller;
@@ -767,10 +704,10 @@ class _VideoProgressState extends State<_VideoProgress> {
         trackHeight: 3,
         thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
         overlayShape: RoundSliderOverlayShape(overlayRadius: 12),
-        activeTrackColor: _violet500,
+        activeTrackColor: _red,
         inactiveTrackColor: Color(0x33FFFFFF),
-        thumbColor: _violet400,
-        overlayColor: Color(0x1A8B5CF6),
+        thumbColor: _red,
+        overlayColor: Color(0x1AFE2C55),
       ),
       child: Slider(
         value: pos.clamp(0.0, 1.0),
@@ -780,7 +717,7 @@ class _VideoProgressState extends State<_VideoProgress> {
   }
 }
 
-// ── Capsule button (previous/next) ──
+// ── Capsule button ──
 
 class _CapsuleButton extends StatelessWidget {
   final IconData icon;
@@ -791,33 +728,29 @@ class _CapsuleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Colors.white10, width: 0.5),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white70, size: 16),
-              const SizedBox(width: 4),
-              Text(label, style: const TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.w500)),
-            ],
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white10, width: 0.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white70, size: 16),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.w500)),
+          ],
         ),
       ),
     );
   }
 }
 
-// ── Comment bottom sheet ──
+// ── Comment sheet ──
 
 class _CommentSheet extends StatefulWidget {
   final String videoId;
@@ -886,23 +819,18 @@ class _CommentSheetState extends State<_CommentSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.6 + bottomInset,
       decoration: const BoxDecoration(
-        color: _surface1,
+        color: _dkS1,
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       child: Column(
         children: [
           const SizedBox(height: 10),
-          // Drag handle
           Center(
             child: Container(
               width: 36, height: 4,
-              decoration: BoxDecoration(
-                color: _surface3,
-                borderRadius: BorderRadius.circular(2),
-              ),
+              decoration: BoxDecoration(color: _dkBorder, borderRadius: BorderRadius.circular(2)),
             ),
           ),
-          // Header
           Padding(
             padding: const EdgeInsets.only(left: 20, right: 16, top: 14, bottom: 10),
             child: Row(
@@ -911,22 +839,19 @@ class _CommentSheetState extends State<_CommentSheet> {
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _surface3,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                  decoration: BoxDecoration(color: _dkS2, borderRadius: BorderRadius.circular(10)),
                   child: Text('${_comments.length}', style: const TextStyle(fontSize: 12, color: _textMuted)),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: _surface3),
+          const Divider(height: 1, color: _dkBorder),
           Expanded(child: _buildCommentList()),
           Container(
             padding: EdgeInsets.fromLTRB(14, 8, 8, bottomInset > 0 ? 8 : 14),
             decoration: const BoxDecoration(
-              color: _surface1,
-              border: Border(top: BorderSide(color: _surface3)),
+              color: _dkS1,
+              border: Border(top: BorderSide(color: _dkBorder)),
             ),
             child: SafeArea(
               top: false,
@@ -934,10 +859,7 @@ class _CommentSheetState extends State<_CommentSheet> {
                 children: [
                   Expanded(
                     child: Container(
-                      decoration: BoxDecoration(
-                        color: _surface2,
-                        borderRadius: BorderRadius.circular(22),
-                      ),
+                      decoration: BoxDecoration(color: _dkS2, borderRadius: BorderRadius.circular(22)),
                       child: TextField(
                         controller: widget.textController,
                         maxLines: 3, minLines: 1,
@@ -958,22 +880,15 @@ class _CommentSheetState extends State<_CommentSheet> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Semantics(
-                    button: true,
-                    label: '发送评论',
-                    child: Container(
-                      width: 44, height: 44,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(colors: [_violet500, Color(0xFFA855F7)]),
-                      ),
-                      child: IconButton(
-                        onPressed: _sending ? null : _sendComment,
-                        icon: _sending
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                        padding: EdgeInsets.zero,
-                      ),
+                  Container(
+                    width: 44, height: 44,
+                    decoration: const BoxDecoration(shape: BoxShape.circle, color: _red),
+                    child: IconButton(
+                      onPressed: _sending ? null : _sendComment,
+                      icon: _sending
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                      padding: EdgeInsets.zero,
                     ),
                   ),
                 ],
@@ -1004,10 +919,6 @@ class _CommentSheetState extends State<_CommentSheet> {
                     ShimmerBox(width: 80 + (i * 20).toDouble(), height: 12, radius: 6),
                     const SizedBox(height: 8),
                     const ShimmerBox(width: double.infinity, height: 14, radius: 7),
-                    if (i.isOdd) ...[
-                      const SizedBox(height: 6),
-                      const ShimmerBox(width: 140, height: 14, radius: 7),
-                    ],
                   ],
                 ),
               ),
@@ -1023,11 +934,11 @@ class _CommentSheetState extends State<_CommentSheet> {
     }
 
     final gradients = const [
-      [Color(0xFF10B981), Color(0xFF14B8A6)],
+      [Color(0xFFFE2C55), Color(0xFFFF4D6A)],
       [Color(0xFFF59E0B), Color(0xFFF97316)],
-      [_violet500, Color(0xFFA855F7)],
+      [Color(0xFF8B5CF6), Color(0xFFA855F7)],
       [Color(0xFF06B6D4), Color(0xFF0EA5E9)],
-      [_rose, Color(0xFFE11D48)],
+      [Color(0xFF22C55E), Color(0xFF4ADE80)],
     ];
 
     return ListView.separated(
@@ -1047,10 +958,7 @@ class _CommentSheetState extends State<_CommentSheet> {
             children: [
               Container(
                 width: 36, height: 36,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: grad),
-                ),
+                decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: grad)),
                 child: Center(
                   child: Text(nickname.characters.first.toUpperCase(),
                       style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),

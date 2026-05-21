@@ -5,24 +5,132 @@ import 'services/api_service.dart';
 import 'providers/auth_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/feed_screen.dart';
+import 'screens/friends_screen.dart';
 import 'screens/upload_screen.dart';
+import 'screens/messages_screen.dart';
 import 'screens/profile_screen.dart';
 
-// ── OLED Dark color tokens ──
-const _black = Color(0xFF000000);
-const _surface1 = Color(0xFF0C0C0C);
-const _surface2 = Color(0xFF1A1A1A);
-const _surface3 = Color(0xFF262626);
-const _violet500 = Color(0xFF8B5CF6);
-const _textMuted = Color(0xFF71717A);
+// ── Douyin color tokens ──
+const _red = Color(0xFFFE2C55);
 
-final _darkScheme = ColorScheme.dark(
-  surface: _surface1,
-  primary: _violet500,
-  onSurface: Colors.white,
-  outline: _surface3,
-  surfaceContainerHighest: _surface2,
-);
+// Dark surface tokens
+const _dkBg = Color(0xFF000000);
+const _dkS1 = Color(0xFF111111);
+const _dkS2 = Color(0xFF161616);
+const _dkBorder = Color(0xFF2A2A2A);
+
+// Light surface tokens
+const _ltBg = Color(0xFFFFFFFF);
+const _ltS1 = Color(0xFFF8F8F8);
+const _ltS2 = Color(0xFFF0F0F0);
+const _ltBorder = Color(0xFFE0E0E0);
+
+// Shared text/muted
+const _textMutedDark = Color(0xFF8A8A8A);
+const _textMutedLight = Color(0xFF999999);
+
+class ThemeNotifier extends ChangeNotifier {
+  ThemeMode _mode = ThemeMode.dark;
+  ThemeMode get mode => _mode;
+  bool get isDark => _mode == ThemeMode.dark;
+
+  void toggle() {
+    _mode = _mode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    notifyListeners();
+  }
+
+  void setMode(ThemeMode m) {
+    if (_mode != m) {
+      _mode = m;
+      notifyListeners();
+    }
+  }
+}
+
+ThemeData _buildTheme(Brightness brightness) {
+  final isDark = brightness == Brightness.dark;
+  final bg = isDark ? _dkBg : _ltBg;
+  final s1 = isDark ? _dkS1 : _ltS1;
+  final s2 = isDark ? _dkS2 : _ltS2;
+  final border = isDark ? _dkBorder : _ltBorder;
+  final muted = isDark ? _textMutedDark : _textMutedLight;
+  final textColor = isDark ? Colors.white : const Color(0xFF1A1A1A);
+
+  final scheme = ColorScheme.fromSeed(
+    seedColor: _red,
+    brightness: brightness,
+    primary: _red,
+    surface: s1,
+    outline: border,
+    surfaceContainerHighest: s2,
+  );
+
+  return ThemeData(
+    colorScheme: scheme,
+    scaffoldBackgroundColor: bg,
+    brightness: brightness,
+    useMaterial3: true,
+    fontFamily: 'sans-serif',
+    appBarTheme: AppBarTheme(
+      backgroundColor: bg,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      foregroundColor: textColor,
+    ),
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: isDark ? _dkBg : _ltBg,
+      selectedItemColor: textColor,
+      unselectedItemColor: muted,
+      type: BottomNavigationBarType.fixed,
+      elevation: 0,
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _red,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        minimumSize: const Size(44, 50),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: s2,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: _red, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+      hintStyle: TextStyle(color: muted, fontSize: 15),
+    ),
+    iconTheme: IconThemeData(color: textColor),
+    dividerColor: border,
+    cardColor: s1,
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: _red),
+    ),
+  );
+}
+
+final _navTabs = const [
+  _NavTab(Icons.home_filled, Icons.home_outlined, '首页'),
+  _NavTab(Icons.people, Icons.people_outline, '朋友'),
+  _NavTab(Icons.add_box, Icons.add_box_outlined, ''),
+  _NavTab(Icons.mail, Icons.mail_outline, '消息'),
+  _NavTab(Icons.person, Icons.person_outlined, '我'),
+];
+
+class _NavTab {
+  final IconData activeIcon;
+  final IconData icon;
+  final String label;
+  const _NavTab(this.activeIcon, this.icon, this.label);
+}
 
 void main() {
   final apiService = ApiService();
@@ -36,59 +144,26 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
-      child: MaterialApp(
-        title: '短视频',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: _darkScheme,
-          scaffoldBackgroundColor: _black,
-          brightness: Brightness.dark,
-          useMaterial3: true,
-          fontFamily: 'sans-serif',
-          appBarTheme: const AppBarTheme(
-            backgroundColor: _black,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-          ),
-          bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-            backgroundColor: _black,
-            selectedItemColor: Colors.white,
-            unselectedItemColor: _textMuted,
-            type: BottomNavigationBarType.fixed,
-            elevation: 0,
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _violet500,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              minimumSize: const Size(44, 50),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: _surface2,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: _violet500, width: 1.5),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          ),
-          iconTheme: const IconThemeData(color: Colors.white),
-        ),
-        initialRoute: '/login',
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/home': (context) => const HomeScreen(),
-          '/upload': (context) => const UploadScreen(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeNotifier()),
+      ],
+      child: Consumer<ThemeNotifier>(
+        builder: (context, themeNotifier, _) {
+          return MaterialApp(
+            title: '抖音',
+            debugShowCheckedModeBanner: false,
+            theme: _buildTheme(Brightness.dark),
+            darkTheme: _buildTheme(Brightness.dark),
+            themeMode: themeNotifier.mode,
+            initialRoute: '/login',
+            routes: {
+              '/login': (context) => const LoginScreen(),
+              '/home': (context) => const HomeScreen(),
+              '/upload': (context) => const UploadScreen(),
+            },
+          );
         },
       ),
     );
@@ -105,30 +180,86 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final _pages = const [FeedScreen(), SizedBox(), ProfileScreen()];
+  final _pages = const [
+    FeedScreen(),
+    FriendsScreen(),
+    SizedBox(),
+    MessagesScreen(),
+    ProfileScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? _dkBg : _ltBg;
+    final border = isDark ? _dkBorder : _ltBorder;
+
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: _surface3, width: 0.5)),
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border(top: BorderSide(color: border, width: 0.5)),
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
           onTap: (i) {
-            if (i == 1) {
+            if (i == 2) {
               Navigator.of(context).pushNamed('/upload').then((_) {});
               return;
             }
             setState(() => _currentIndex = i);
           },
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home_filled, size: 22), label: '首页'),
-            BottomNavigationBarItem(icon: Icon(Icons.add_box_outlined, size: 22), label: '上传'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_outline, size: 22), label: '我的'),
-          ],
+          items: List.generate(5, (i) {
+            final tab = _navTabs[i];
+            Widget icon = Icon(tab.icon, size: 24);
+
+            // Badge on messages tab (index 3)
+            if (i == 3) {
+              icon = Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(tab.icon, size: 24),
+                  Positioned(
+                    right: -6, top: -4,
+                    child: Container(
+                      width: 16, height: 16,
+                      decoration: const BoxDecoration(
+                        color: _red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Text('3', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return BottomNavigationBarItem(
+              icon: icon,
+              activeIcon: i == 3
+                  ? Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(tab.activeIcon, size: 24),
+                        Positioned(
+                          right: -6, top: -4,
+                          child: Container(
+                            width: 16, height: 16,
+                            decoration: const BoxDecoration(color: _red, shape: BoxShape.circle),
+                            child: const Center(
+                              child: Text('3', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Icon(tab.activeIcon, size: 24),
+              label: tab.label,
+            );
+          }),
         ),
       ),
     );
