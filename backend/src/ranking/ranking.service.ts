@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { RedisService } from '../redis/redis.service';
 import { Video, VideoStatus } from '../video/video.entity';
+import { Follow } from '../social/follow.entity';
 
 @Injectable()
 export class RankingService {
@@ -11,33 +12,69 @@ export class RankingService {
 
   constructor(
     @InjectRepository(Video) private videoRepo: Repository<Video>,
+    @InjectRepository(Follow) private followRepo: Repository<Follow>,
     private redisService: RedisService,
   ) {}
 
   async getHotVideos(page: number = 1, limit: number = 20) {
-    const start = (page - 1) * limit;
-    const end = start + limit - 1;
+    const hotCount = Math.floor(limit / 2);
+    const randomCount = limit - hotCount;
 
-    const members = await this.redisService.zRangeWithScores(this.HOT_KEY, start, end, { REV: true });
+    // 1. Fetch hot-ranked video IDs from Redis
+    const members = await this.redisService.zRangeWithScores(this.HOT_KEY, 0, 99, { REV: true });
+    const hotIds = members.map((m: Record<string, unknown>) => m.value as string);
 
-    if (members.length === 0) {
-      const [items, total] = await this.videoRepo.findAndCount({
-        where: { status: VideoStatus.READY },
-        relations: ['author'],
-        order: { playCount: 'DESC' },
-        skip: start,
-        take: limit,
-      });
-      return { items, total, page, limit };
+    // 2. Pick a random slice of hot videos (different each call, even on page 1)
+    const shuffledHot = hotIds.sort(() => Math.random() - 0.5);
+    const pickedHot = shuffledHot.slice(0, hotCount);
+
+    // 3. Fetch random videos from DB (excluding hot picks)
+    const allVideos = await this.videoRepo.find({
+      where: { status: VideoStatus.READY },
+      relations: ['author'],
+    });
+
+    const hotSet = new Set(pickedHot);
+    const nonHot = allVideos.filter((v) => !hotSet.has(v.id));
+    const shuffledNonHot = nonHot.sort(() => Math.random() - 0.5);
+    const pickedRandom = shuffledNonHot.slice(0, randomCount);
+
+    // 4. Combine hot videos with their full data
+    const hotVideos = allVideos.filter((v) => hotSet.has(v.id));
+    const hotMap = new Map(hotVideos.map((v) => [v.id, v]));
+    const hotSorted = pickedHot.map((id) => hotMap.get(id)).filter(Boolean);
+
+    // 5. Interleave: hot and random mixed evenly
+    const mixed: Video[] = [];
+    for (let i = 0; i < limit; i++) {
+      if (i % 2 === 0 && hotSorted.length > 0) {
+        mixed.push(hotSorted.shift()!);
+      } else if (pickedRandom.length > 0) {
+        mixed.push(pickedRandom.shift()!);
+      } else if (hotSorted.length > 0) {
+        mixed.push(hotSorted.shift()!);
+      }
     }
 
-    const videoIds = members.map((m: Record<string, unknown>) => m.value as string);
-    const videos = await this.videoRepo.find({ where: { id: In(videoIds) }, relations: ['author'] });
+    return { items: mixed, total: allVideos.length, page, limit };
+  }
 
-    const videoMap = new Map(videos.map((v) => [v.id, v]));
-    const sorted = videoIds.map((id: string) => videoMap.get(id)).filter(Boolean);
+  async getFollowingVideos(userId: string, page: number = 1, limit: number = 20) {
+    const follows = await this.followRepo.find({ where: { followerId: userId } });
+    const followingIds = follows.map((f) => f.followingId);
 
-    return { items: sorted, total: members.length, page, limit };
+    if (followingIds.length === 0) {
+      return { items: [], total: 0, page, limit };
+    }
+
+    const [items, total] = await this.videoRepo.findAndCount({
+      where: { authorId: In(followingIds), status: VideoStatus.READY },
+      relations: ['author'],
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   @Cron('*/30 * * * *')

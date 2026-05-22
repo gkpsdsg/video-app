@@ -23,6 +23,9 @@ export class User {
   @Column({ nullable: true })
   avatar: string;
 
+  @Column({ default: 'user', length: 20 })
+  role: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

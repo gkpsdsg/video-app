@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_service.dart';
 import 'providers/auth_provider.dart';
 import 'screens/login_screen.dart';
@@ -34,8 +35,21 @@ class ThemeNotifier extends ChangeNotifier {
   ThemeMode get mode => _mode;
   bool get isDark => _mode == ThemeMode.dark;
 
-  void toggle() {
+  ThemeNotifier() {
+    _loadFromPrefs();
+  }
+
+  Future<void> _loadFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isDark = prefs.getBool('isDark') ?? true;
+    _mode = isDark ? ThemeMode.dark : ThemeMode.light;
+    notifyListeners();
+  }
+
+  Future<void> toggle() async {
     _mode = _mode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isDark', _mode == ThemeMode.dark);
     notifyListeners();
   }
 

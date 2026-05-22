@@ -10,6 +10,7 @@ class DouyinActionBar extends StatelessWidget {
   final int commentCount;
   final int bookmarkCount;
   final int shareCount;
+  final bool isBookmarked;
   final String authorAvatar;
   final String authorInitial;
   final VoidCallback onLike;
@@ -25,6 +26,7 @@ class DouyinActionBar extends StatelessWidget {
     required this.commentCount,
     required this.bookmarkCount,
     required this.shareCount,
+    this.isBookmarked = false,
     required this.authorAvatar,
     required this.authorInitial,
     required this.onLike,
@@ -97,8 +99,10 @@ class DouyinActionBar extends StatelessWidget {
         const SizedBox(height: 16),
         // Bookmark
         _ActionItem(
-          icon: Icons.bookmark_border,
+          icon: isBookmarked ? Icons.bookmark : Icons.bookmark_border,
           label: _fmt(bookmarkCount),
+          active: isBookmarked,
+          activeColor: const Color(0xFFFFD700),
           onTap: () {
             HapticFeedback.lightImpact();
             onBookmark();
@@ -138,8 +142,9 @@ class _ActionItem extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
   final bool active;
+  final Color? activeColor;
 
-  const _ActionItem({required this.icon, required this.label, required this.onTap, this.active = false});
+  const _ActionItem({required this.icon, required this.label, required this.onTap, this.active = false, this.activeColor});
 
   @override
   State<_ActionItem> createState() => _ActionItemState();
@@ -160,7 +165,7 @@ class _ActionItemState extends State<_ActionItem> {
         duration: const Duration(milliseconds: 150),
         child: Column(
           children: [
-            Icon(widget.icon, color: widget.active ? _red : Colors.white, size: 32),
+            Icon(widget.icon, color: widget.active ? (widget.activeColor ?? _red) : Colors.white, size: 32),
             const SizedBox(height: 2),
             Text(widget.label,
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12, fontWeight: FontWeight.w500)),

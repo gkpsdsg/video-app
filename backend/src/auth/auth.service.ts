@@ -42,7 +42,7 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.userRepository.findOne({
       where: { username: dto.username },
-      select: ['id', 'username', 'password', 'nickname', 'avatar'],
+      select: ['id', 'username', 'password', 'nickname', 'avatar', 'role'],
     });
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -58,7 +58,7 @@ export class AuthService {
   }
 
   private generateToken(user: User): string {
-    const payload = { sub: user.id, username: user.username };
+    const payload = { sub: user.id, username: user.username, role: user.role };
     return this.jwtService.sign(payload);
   }
 

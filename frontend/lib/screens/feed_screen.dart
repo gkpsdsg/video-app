@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/shimmer_box.dart';
 import '../widgets/douyin_top_bar.dart';
 import '../widgets/douyin_action_bar.dart';
 import '../widgets/heart_burst.dart';
+import 'search_screen.dart';
+import 'chat_screen.dart';
 
 const _red = Color(0xFFFE2C55);
 const _dkS1 = Color(0xFF111111);
@@ -66,14 +70,18 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Future<void> _fetchVideos() async {
     try {
-      final res = await _api.dio.get('/feed/hot', queryParameters: {'page': 1, 'limit': 20});
-      final items = (res.data['items'] as List).map((v) => VideoItem(
-        id: v['id'].toString(),
-        title: v['title'] ?? '',
-        author: v['author'] is Map<String, dynamic> ? v['author'] : <String, dynamic>{},
-        likeCount: v['likeCount'] ?? 0,
-        commentCount: v['commentCount'] ?? 0,
-      )).toList();
+      final endpoint = _feedTabIndex == 0 ? '/feed/following' : '/feed/hot';
+      final res = await _api.dio.get(endpoint, queryParameters: {'page': 1, 'limit': 20});
+      final items = (res.data['items'] as List).map((v) {
+        final videoData = _feedTabIndex == 0 ? (v as Map<String, dynamic>) : v;
+        return VideoItem(
+          id: videoData['id'].toString(),
+          title: videoData['title'] ?? '',
+          author: videoData['author'] is Map<String, dynamic> ? videoData['author'] : <String, dynamic>{},
+          likeCount: videoData['likeCount'] ?? 0,
+          commentCount: videoData['commentCount'] ?? 0,
+        );
+      }).toList();
       if (mounted) {
         setState(() {
           _videos = items;
@@ -88,6 +96,18 @@ class _FeedScreenState extends State<FeedScreen> {
         });
       }
     }
+  }
+
+  void _onTabChanged(int index) {
+    if (_feedTabIndex == index) return;
+    setState(() {
+      _feedTabIndex = index;
+      _isLoading = true;
+      _videos = [];
+      _currentPage = 0;
+    });
+    _pageController.jumpToPage(0);
+    _fetchVideos();
   }
 
   void _onPlayPauseChanged(bool isPlaying) {
@@ -174,9 +194,19 @@ class _FeedScreenState extends State<FeedScreen> {
             top: 0, left: 0, right: 0,
             child: DouyinTopBar(
               activeIndex: _feedTabIndex,
-              onTabChanged: (i) => setState(() => _feedTabIndex = i),
-              onSearch: () {},
-              onLive: () {},
+              onTabChanged: _onTabChanged,
+              onSearch: () {
+                HapticFeedback.lightImpact();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SearchScreen()),
+                );
+              },
+              onLive: () {
+                HapticFeedback.lightImpact();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('暂无直播'), behavior: SnackBarBehavior.floating),
+                );
+              },
             ),
           ),
           // Bottom control bar
@@ -190,8 +220,9 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Widget _buildControlBar() {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Container(
-      padding: const EdgeInsets.only(top: 8, bottom: 28),
+      padding: EdgeInsets.only(top: 8, bottom: bottomPadding > 0 ? bottomPadding : 12),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
@@ -271,6 +302,11 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
   late int _commentCount;
   bool _likeLoading = false;
   bool _isMuted = true;
+  bool _isBookmarked = false;
+  int _bookmarkCount = 0;
+  bool _isFollowing = false;
+  bool _bookmarkLoading = false;
+  bool _isAdmin = false;
   Widget? _heartBurst;
 
   @override
@@ -278,7 +314,11 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     super.initState();
     _likeCount = widget.video.likeCount;
     _commentCount = widget.video.commentCount;
+    _isAdmin = context.read<AuthProvider>().user?['role'] == 'admin';
     _checkLikeStatus();
+    _checkBookmarkStatus();
+    _fetchBookmarkCount();
+    _checkFollowStatus();
     if (widget.isCurrent) _initVideo();
   }
 
@@ -307,6 +347,125 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
       final res = await ApiService().dio.get('/like/${widget.video.id}/status');
       if (mounted) setState(() => _isLiked = res.data['liked'] == true);
     } catch (_) {}
+  }
+
+  Future<void> _checkBookmarkStatus() async {
+    try {
+      final res = await ApiService().dio.get('/bookmark/${widget.video.id}/status');
+      if (mounted) setState(() => _isBookmarked = res.data['bookmarked'] == true);
+    } catch (_) {}
+  }
+
+  Future<void> _fetchBookmarkCount() async {
+    try {
+      final res = await ApiService().dio.get('/bookmark/${widget.video.id}/count');
+      if (mounted) setState(() => _bookmarkCount = res.data['count'] ?? 0);
+    } catch (_) {}
+  }
+
+  Future<void> _checkFollowStatus() async {
+    try {
+      final authorId = widget.video.author['id']?.toString();
+      if (authorId == null) return;
+      final res = await ApiService().dio.get('/follow/$authorId/status');
+      if (mounted) setState(() => _isFollowing = res.data['following'] == true);
+    } catch (_) {}
+  }
+
+  void _toggleBookmark() {
+    if (_bookmarkLoading) return;
+    HapticFeedback.lightImpact();
+    _bookmarkLoading = true;
+
+    final wasBookmarked = _isBookmarked;
+    setState(() {
+      _isBookmarked = !_isBookmarked;
+      _bookmarkCount += _isBookmarked ? 1 : -1;
+    });
+
+    ApiService().dio.post('/bookmark/${widget.video.id}').then((res) {
+      if (mounted) {
+        setState(() => _isBookmarked = res.data['bookmarked'] == true);
+      }
+      _bookmarkLoading = false;
+    }).catchError((_) {
+      if (mounted) {
+        setState(() {
+          _isBookmarked = wasBookmarked;
+          _bookmarkCount += wasBookmarked ? 1 : -1;
+        });
+      }
+      _bookmarkLoading = false;
+    });
+  }
+
+  void _toggleFollow() {
+    HapticFeedback.lightImpact();
+    final authorId = widget.video.author['id']?.toString();
+    if (authorId == null) return;
+
+    final wasFollowing = _isFollowing;
+    setState(() => _isFollowing = !_isFollowing);
+
+    final messenger = ScaffoldMessenger.of(context);
+    ApiService().dio.post('/follow/$authorId').then((res) {
+      if (mounted) setState(() => _isFollowing = res.data['following'] == true);
+    }).catchError((_) {
+      if (mounted) {
+        setState(() => _isFollowing = wasFollowing);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('操作失败，请重试'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    });
+  }
+
+  void _messageAuthor() {
+    HapticFeedback.lightImpact();
+    final author = widget.video.author;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          conversationId: '',
+          otherParticipant: author,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteVideo() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161616),
+        title: const Text('删除视频', style: TextStyle(color: Colors.white)),
+        content: Text('确定要删除「${widget.video.title}」吗？\n此操作不可撤销。',
+            style: const TextStyle(color: Color(0xFF8A8A8A))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除', style: TextStyle(color: Color(0xFFFE2C55))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ApiService().dio.delete('/video/${widget.video.id}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('视频已删除'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('删除失败'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
   }
 
   Future<void> _initVideo() async {
@@ -441,7 +600,6 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
 
   Future<void> _showCommentSheet() async {
     HapticFeedback.lightImpact();
-    final textController = TextEditingController();
     final api = ApiService();
     // ignore: use_build_context_synchronously
     await showModalBottomSheet<void>(
@@ -450,7 +608,6 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => _CommentSheet(
         videoId: widget.video.id,
-        textController: textController,
         api: api,
         fetchComments: _fetchComments,
         onCommentCountChanged: (delta) {
@@ -458,7 +615,6 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
         },
       ),
     );
-    textController.dispose();
   }
 
   void _share() {
@@ -604,16 +760,55 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
                       ),
                       const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: _red, width: 1),
+                      GestureDetector(
+                        onTap: _toggleFollow,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: _isFollowing ? _textMuted : _red, width: 1),
+                          ),
+                          child: Text(
+                            _isFollowing ? '已关注' : '关注',
+                            style: TextStyle(color: _isFollowing ? _textMuted : _red, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
                         ),
-                        child: const Text('关注', style: TextStyle(color: _red, fontSize: 11, fontWeight: FontWeight.w600)),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _messageAuthor,
+                        child: Container(
+                          width: 30, height: 30,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: const Icon(Icons.mail_outline, color: Colors.white, size: 16),
+                        ),
                       ),
                     ],
                   ),
+                  if (_isAdmin) ...[
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: _deleteVideo,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _red,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.delete, color: Colors.white, size: 18),
+                            SizedBox(width: 6),
+                            Text('删除此视频', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    ],
                   const SizedBox(height: 8),
                   Text(video.title,
                       style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
@@ -637,18 +832,14 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
                 isLiked: _isLiked,
                 likeCount: _likeCount,
                 commentCount: _commentCount,
-                bookmarkCount: 0,
+                bookmarkCount: _bookmarkCount,
                 shareCount: 0,
+                isBookmarked: _isBookmarked,
                 authorAvatar: video.author['avatar']?.toString() ?? '',
                 authorInitial: authorInitial,
                 onLike: _toggleLike,
                 onComment: _showCommentSheet,
-                onBookmark: () {
-                  HapticFeedback.lightImpact();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已收藏'), behavior: SnackBarBehavior.floating),
-                  );
-                },
+                onBookmark: _toggleBookmark,
                 onShare: _share,
               ),
             ),
@@ -677,6 +868,8 @@ class _VideoProgress extends StatefulWidget {
 }
 
 class _VideoProgressState extends State<_VideoProgress> {
+  bool _isSeeking = false;
+
   @override
   void initState() {
     super.initState();
@@ -690,15 +883,24 @@ class _VideoProgressState extends State<_VideoProgress> {
   }
 
   void _onChange() {
+    if (mounted && !_isSeeking) setState(() {});
+  }
+
+  void _seekTo(double value) {
+    final duration = widget.controller.value.duration;
+    if (duration.inMilliseconds == 0) return;
+    final target = Duration(milliseconds: (value * duration.inMilliseconds).round());
+    widget.controller.seekTo(target);
     if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final v = widget.controller.value;
-    final pos = v.duration.inMilliseconds > 0
-        ? v.position.inMilliseconds / v.duration.inMilliseconds
-        : 0.0;
+    final durationMs = v.duration.inMilliseconds;
+    final positionMs = v.position.inMilliseconds;
+    final pos = durationMs > 0 ? positionMs / durationMs : 0.0;
+
     return SliderTheme(
       data: const SliderThemeData(
         trackHeight: 3,
@@ -711,7 +913,11 @@ class _VideoProgressState extends State<_VideoProgress> {
       ),
       child: Slider(
         value: pos.clamp(0.0, 1.0),
-        onChanged: (_) {},
+        onChangeStart: (_) => _isSeeking = true,
+        onChanged: _seekTo,
+        onChangeEnd: (_) {
+          _isSeeking = false;
+        },
       ),
     );
   }
@@ -754,14 +960,12 @@ class _CapsuleButton extends StatelessWidget {
 
 class _CommentSheet extends StatefulWidget {
   final String videoId;
-  final TextEditingController textController;
   final ApiService api;
   final Future<List<Map<String, dynamic>>> Function() fetchComments;
   final ValueChanged<int> onCommentCountChanged;
 
   const _CommentSheet({
     required this.videoId,
-    required this.textController,
     required this.api,
     required this.fetchComments,
     required this.onCommentCountChanged,
@@ -772,14 +976,23 @@ class _CommentSheet extends StatefulWidget {
 }
 
 class _CommentSheetState extends State<_CommentSheet> {
+  final _textController = TextEditingController();
   List<Map<String, dynamic>> _comments = [];
   bool _loading = true;
   bool _sending = false;
+  String? _replyToId;
+  String? _replyToName;
 
   @override
   void initState() {
     super.initState();
     _loadComments();
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadComments() async {
@@ -793,13 +1006,17 @@ class _CommentSheetState extends State<_CommentSheet> {
   }
 
   Future<void> _sendComment() async {
-    final content = widget.textController.text.trim();
+    final content = _textController.text.trim();
     if (content.isEmpty) return;
     setState(() => _sending = true);
     try {
-      await widget.api.dio.post('/comment/${widget.videoId}', data: {'content': content});
-      widget.textController.clear();
+      final data = <String, dynamic>{'content': content};
+      if (_replyToId != null) data['parentId'] = _replyToId;
+      await widget.api.dio.post('/comment/${widget.videoId}', data: data);
+      _textController.clear();
       widget.onCommentCountChanged(1);
+      _replyToId = null;
+      _replyToName = null;
       await _loadComments();
     } catch (_) {
       if (mounted) {
@@ -861,11 +1078,11 @@ class _CommentSheetState extends State<_CommentSheet> {
                     child: Container(
                       decoration: BoxDecoration(color: _dkS2, borderRadius: BorderRadius.circular(22)),
                       child: TextField(
-                        controller: widget.textController,
+                        controller: _textController,
                         maxLines: 3, minLines: 1,
                         style: const TextStyle(color: Colors.white, fontSize: 13),
                         decoration: InputDecoration(
-                          hintText: '说点什么...',
+                          hintText: _replyToName != null ? '回复 @$_replyToName...' : '说点什么...',
                           hintStyle: const TextStyle(color: _textMuted, fontSize: 13),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -927,7 +1144,18 @@ class _CommentSheetState extends State<_CommentSheet> {
         ),
       );
     }
-    if (_comments.isEmpty) {
+
+    // Build flat list with depth info: top-level depth=0, replies depth=1
+    final flatList = <_FlatComment>[];
+    for (final c in _comments) {
+      flatList.add(_FlatComment(data: c, depth: 0));
+      final children = (c['children'] as List?) ?? [];
+      for (final child in children) {
+        flatList.add(_FlatComment(data: child as Map<String, dynamic>, depth: 1));
+      }
+    }
+
+    if (flatList.isEmpty) {
       return Center(
         child: Text('暂无评论，快来抢沙发吧~', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
       );
@@ -941,36 +1169,63 @@ class _CommentSheetState extends State<_CommentSheet> {
       [Color(0xFF22C55E), Color(0xFF4ADE80)],
     ];
 
-    return ListView.separated(
+    return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      itemCount: _comments.length,
-      separatorBuilder: (_, _) => const Divider(height: 1, color: Color(0x10FFFFFF)),
+      itemCount: flatList.length,
       itemBuilder: (context, index) {
-        final c = _comments[index];
+        final entry = flatList[index];
+        final c = entry.data;
         final user = (c['user'] as Map<String, dynamic>?) ?? <String, dynamic>{};
         final nickname = (user['nickname'] ?? user['username'] ?? '匿名用户').toString();
         final content = (c['content'] ?? '').toString();
+        final isReply = entry.depth > 0;
         final grad = gradients[index % gradients.length];
+
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: grad)),
-                child: Center(
-                  child: Text(nickname.characters.first.toUpperCase(),
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+              if (isReply) const SizedBox(width: 46),
+              if (!isReply) ...[
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: grad)),
+                  child: Center(
+                    child: Text(nickname.characters.first.toUpperCase(),
+                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
+                const SizedBox(width: 10),
+              ],
+              if (isReply)
+                Container(
+                  width: 28, height: 28,
+                  margin: const EdgeInsets.only(right: 8, top: 2),
+                  decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: grad)),
+                  child: Center(
+                    child: Text(nickname.characters.first.toUpperCase(),
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                  ),
+                ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(nickname, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textSecondary)),
-                    const SizedBox(height: 4),
+                    if (isReply) ...[
+                      Row(
+                        children: [
+                          Text(nickname, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _textSecondary)),
+                          const SizedBox(width: 6),
+                          Text('回复', style: TextStyle(fontSize: 10, color: Colors.grey[700])),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    if (!isReply) ...[
+                      Text(nickname, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textSecondary)),
+                      const SizedBox(height: 4),
+                    ],
                     Text(content, style: const TextStyle(fontSize: 14, color: Color(0xFFD4D4D8), height: 1.45)),
                     const SizedBox(height: 8),
                     Row(
@@ -980,7 +1235,16 @@ class _CommentSheetState extends State<_CommentSheet> {
                           onTap: () {},
                         ),
                         const SizedBox(width: 16),
-                        Text('回复', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                        GestureDetector(
+                          onTap: () {
+                            final replyName = (c['user']?['nickname'] ?? c['user']?['username'] ?? '').toString();
+                            setState(() {
+                              _replyToId = c['id']?.toString();
+                              _replyToName = replyName;
+                            });
+                          },
+                          child: Text('回复', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                        ),
                       ],
                     ),
                   ],
@@ -992,4 +1256,10 @@ class _CommentSheetState extends State<_CommentSheet> {
       },
     );
   }
+}
+
+class _FlatComment {
+  final Map<String, dynamic> data;
+  final int depth;
+  const _FlatComment({required this.data, required this.depth});
 }

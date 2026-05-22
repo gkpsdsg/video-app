@@ -66,4 +66,14 @@ export class SocialController {
   getFollowing(@Req() req: any, @Query('page') page: number = 1, @Query('limit') limit: number = 20) {
     return this.socialService.getFollowing(req.user.id, +page, +limit);
   }
+
+  @Get('user/:id/likes')
+  @ApiOperation({ summary: '获取用户点赞的视频' })
+  getUserLikedVideos(
+    @Param('id') userId: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
+    return this.socialService.getUserLikedVideos(userId, +page, +limit);
+  }
 }

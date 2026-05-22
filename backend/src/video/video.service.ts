@@ -6,11 +6,17 @@ import type { Queue } from 'bull';
 import { v4 as uuidv4 } from 'uuid';
 import { MinioService } from '../minio/minio.service';
 import { Video, VideoStatus } from './video.entity';
+import { Comment } from '../social/comment.entity';
+import { Like } from '../social/like.entity';
+import { Bookmark } from '../bookmark/bookmark.entity';
 
 @Injectable()
 export class VideoService {
   constructor(
     @InjectRepository(Video) private videoRepo: Repository<Video>,
+    @InjectRepository(Comment) private commentRepo: Repository<Comment>,
+    @InjectRepository(Like) private likeRepo: Repository<Like>,
+    @InjectRepository(Bookmark) private bookmarkRepo: Repository<Bookmark>,
     @InjectQueue('video') private videoQueue: Queue,
     private minioService: MinioService,
   ) {}
@@ -62,6 +68,15 @@ export class VideoService {
     return { url, video };
   }
 
+  async getCoverUrl(id: string) {
+    const video = await this.videoRepo.findOne({ where: { id } });
+    if (!video || !video.coverObjectName) {
+      throw new NotFoundException('封面不存在');
+    }
+    const url = await this.minioService.getFileUrl(video.coverObjectName);
+    return { url };
+  }
+
   async findByUser(authorId: string, page: number = 1, limit: number = 20) {
     const [items, total] = await this.videoRepo.findAndCount({
       where: { authorId, status: VideoStatus.READY },
@@ -70,5 +85,26 @@ export class VideoService {
       take: limit,
     });
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async delete(id: string) {
+    const video = await this.videoRepo.findOne({ where: { id } });
+    if (!video) throw new NotFoundException('视频不存在');
+
+    // Delete from MinIO
+    try { await this.minioService.deleteFile(video.minioObjectName); } catch {}
+    if (video.coverObjectName) {
+      try { await this.minioService.deleteFile(video.coverObjectName); } catch {}
+    }
+
+    // Cascade delete related data
+    await this.commentRepo.delete({ videoId: id });
+    await this.likeRepo.delete({ videoId: id });
+    await this.bookmarkRepo.delete({ videoId: id });
+
+    // Delete the video record
+    await this.videoRepo.remove(video);
+
+    return { deleted: true };
   }
 }

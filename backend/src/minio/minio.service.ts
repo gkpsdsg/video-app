@@ -80,4 +80,8 @@ export class MinioService implements OnModuleInit {
       expiry,
     );
   }
+
+  async deleteFile(fileName: string) {
+    await this.minioClient.removeObject(this.bucketName, fileName);
+  }
 }

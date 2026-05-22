@@ -16,4 +16,14 @@ export class SearchController {
   ) {
     return this.searchService.search(keyword, +page, +limit);
   }
+
+  @Get('users')
+  @ApiOperation({ summary: '搜索用户' })
+  searchUsers(
+    @Query('keyword') keyword: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
+    return this.searchService.searchUsers(keyword, +page, +limit);
+  }
 }

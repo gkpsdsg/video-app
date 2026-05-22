@@ -4,19 +4,17 @@ import {
   Column,
   CreateDateColumn,
   ManyToOne,
-  OneToMany,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import { User } from '../auth/user.entity';
 import { Video } from '../video/video.entity';
 
-@Entity('comments')
-export class Comment {
+@Entity('bookmarks')
+@Unique(['userId', 'videoId'])
+export class Bookmark {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column('text')
-  content: string;
 
   @Column()
   userId: string;
@@ -31,16 +29,6 @@ export class Comment {
   @ManyToOne(() => Video)
   @JoinColumn({ name: 'videoId' })
   video: Video;
-
-  @Column({ nullable: true })
-  parentId: string;
-
-  @ManyToOne(() => Comment, { nullable: true })
-  @JoinColumn({ name: 'parentId' })
-  parent: Comment;
-
-  @OneToMany(() => Comment, (comment) => comment.parent)
-  children: Comment[];
 
   @CreateDateColumn()
   createdAt: Date;

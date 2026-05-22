@@ -22,7 +22,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _api = ApiService();
   Map<String, dynamic>? _profile;
   List<Map<String, dynamic>> _videos = [];
+  List<Map<String, dynamic>> _likedVideos = [];
+  List<Map<String, dynamic>> _bookmarkedVideos = [];
+  final Map<String, String> _coverUrls = {};
   bool _isLoading = true;
+  bool _likesLoading = false;
+  bool _bookmarksLoading = false;
   int _tabIndex = 0;
 
   @override
@@ -37,13 +42,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (user == null) return;
       final userId = user['id'];
       final res = await _api.dio.get('/user/$userId/profile');
-      setState(() {
-        _profile = res.data;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _profile = res.data;
+          _isLoading = false;
+        });
+      }
       _loadVideos();
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -53,10 +60,80 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (user == null) return;
       final userId = user['id'];
       final res = await _api.dio.get('/user/$userId/videos');
-      setState(() {
-        _videos = List<Map<String, dynamic>>.from(res.data['items'] ?? []);
-      });
+      if (mounted) {
+        final videos = List<Map<String, dynamic>>.from(res.data['items'] ?? []);
+        setState(() => _videos = videos);
+        _batchLoadCoverUrls(videos);
+      }
     } catch (_) {}
+  }
+
+  Future<void> _loadLikedVideos() async {
+    if (_likesLoading || _likedVideos.isNotEmpty) return;
+    setState(() => _likesLoading = true);
+    try {
+      final user = context.read<AuthProvider>().user;
+      if (user == null) return;
+      final userId = user['id'];
+      final res = await _api.dio.get('/user/$userId/likes');
+      if (mounted) {
+        final liked = List<Map<String, dynamic>>.from(res.data['items'] ?? []);
+        setState(() {
+          _likedVideos = liked;
+          _likesLoading = false;
+        });
+        _batchLoadCoverUrls(liked, isNested: true);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _likesLoading = false);
+    }
+  }
+
+  Future<void> _loadBookmarkedVideos() async {
+    if (_bookmarksLoading || _bookmarkedVideos.isNotEmpty) return;
+    setState(() => _bookmarksLoading = true);
+    try {
+      final res = await _api.dio.get('/bookmarks');
+      if (mounted) {
+        final bookmarked = List<Map<String, dynamic>>.from(res.data['items'] ?? []);
+        setState(() {
+          _bookmarkedVideos = bookmarked;
+          _bookmarksLoading = false;
+        });
+        _batchLoadCoverUrls(bookmarked, isNested: true);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _bookmarksLoading = false);
+    }
+  }
+
+  Future<void> _batchLoadCoverUrls(List<Map<String, dynamic>> items, {bool isNested = false}) async {
+    final futures = <Future<void>>[];
+    for (final item in items) {
+      final video = isNested ? (item['video'] as Map<String, dynamic>?) : item;
+      if (video == null) continue;
+      final videoId = video['id']?.toString();
+      if (videoId == null || _coverUrls.containsKey(videoId)) continue;
+      futures.add(_fetchCoverUrl(videoId));
+    }
+    await Future.wait(futures);
+  }
+
+  Future<void> _fetchCoverUrl(String videoId) async {
+    try {
+      final res = await _api.dio.get('/video/$videoId/cover');
+      final url = res.data['url']?.toString();
+      if (url != null && mounted) {
+        setState(() => _coverUrls[videoId] = url);
+      }
+    } catch (_) {}
+  }
+
+  void _onTabChanged(int index) {
+    HapticFeedback.selectionClick();
+    setState(() => _tabIndex = index);
+    if (index == 1) _loadLikedVideos();
+    if (index == 2) _loadBookmarkedVideos();
   }
 
   void _handleLogout() {
@@ -140,13 +217,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final followingCount = _fmt(profile['followingCount'] ?? 0);
     final likeTotal = _fmt(profile['likeTotal'] ?? 0);
 
+    List<Map<String, dynamic>> currentData;
+    String emptyText;
+    bool tabLoading;
+    if (_tabIndex == 0) {
+      currentData = _videos;
+      emptyText = '暂无作品';
+      tabLoading = false;
+    } else if (_tabIndex == 1) {
+      currentData = _likedVideos;
+      emptyText = '暂无喜欢的视频';
+      tabLoading = _likesLoading;
+    } else {
+      currentData = _bookmarkedVideos;
+      emptyText = '暂无收藏';
+      tabLoading = _bookmarksLoading;
+    }
+
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header with settings + message + QR
+            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
               child: Row(
@@ -165,35 +259,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.qr_code_scanner, color: Colors.white70, size: 22),
-                        onPressed: () {},
-                        visualDensity: VisualDensity.compact,
-                      ),
+                      IconButton(icon: const Icon(Icons.qr_code_scanner, color: Colors.white70, size: 22), onPressed: () {}, visualDensity: VisualDensity.compact),
                       Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.mail_outline, color: Colors.white70, size: 22),
-                            onPressed: () {},
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          const Positioned(
-                            right: 6, top: 4,
-                            child: Icon(Icons.circle, size: 8, color: _red),
-                          ),
+                          IconButton(icon: const Icon(Icons.mail_outline, color: Colors.white70, size: 22), onPressed: () {}, visualDensity: VisualDensity.compact),
+                          const Positioned(right: 6, top: 4, child: Icon(Icons.circle, size: 8, color: _red)),
                         ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.settings_outlined, color: Colors.white70, size: 22),
-                        onPressed: () {},
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.logout, color: Colors.white70, size: 20),
-                        onPressed: _handleLogout,
-                        visualDensity: VisualDensity.compact,
-                      ),
+                      IconButton(icon: const Icon(Icons.settings_outlined, color: Colors.white70, size: 22), onPressed: () {}, visualDensity: VisualDensity.compact),
+                      IconButton(icon: const Icon(Icons.logout, color: Colors.white70, size: 20), onPressed: _handleLogout, visualDensity: VisualDensity.compact),
                     ],
                   ),
                 ],
@@ -246,7 +321,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            // Actions
+            // Edit profile button
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -268,10 +343,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(width: 8),
                   Container(
                     width: 44, height: 44,
-                    decoration: BoxDecoration(
-                      color: isDark ? _dkS2 : const Color(0xFFF0F0F0),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    decoration: BoxDecoration(color: isDark ? _dkS2 : const Color(0xFFF0F0F0), borderRadius: BorderRadius.circular(8)),
                     child: const Icon(Icons.share, size: 18, color: _textSecondary),
                   ),
                 ],
@@ -283,41 +355,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
               decoration: BoxDecoration(border: Border(bottom: BorderSide(color: border))),
               child: Row(
                 children: [
-                  _TabItem(label: '作品', active: _tabIndex == 0, onTap: () { HapticFeedback.selectionClick(); setState(() => _tabIndex = 0); }),
-                  _TabItem(label: '喜欢', active: _tabIndex == 1, onTap: () { HapticFeedback.selectionClick(); setState(() => _tabIndex = 1); }),
-                  _TabItem(label: '收藏', active: _tabIndex == 2, onTap: () { HapticFeedback.selectionClick(); setState(() => _tabIndex = 2); }),
+                  _TabItem(label: '作品', active: _tabIndex == 0, onTap: () => _onTabChanged(0)),
+                  _TabItem(label: '喜欢', active: _tabIndex == 1, onTap: () => _onTabChanged(1)),
+                  _TabItem(label: '收藏', active: _tabIndex == 2, onTap: () => _onTabChanged(2)),
                 ],
               ),
             ),
-            // Grid
+            // Grid content
             Expanded(
-              child: _videos.isEmpty
-                  ? Center(child: Text('暂无作品', style: TextStyle(color: muted, fontSize: 13)))
-                  : GridView.builder(
+              child: tabLoading
+                  ? GridView.builder(
                       padding: const EdgeInsets.all(2),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 3, crossAxisSpacing: 2, mainAxisSpacing: 2, childAspectRatio: 0.56,
                       ),
-                      itemCount: _videos.length,
-                      itemBuilder: (context, index) {
-                        final v = _videos[index];
-                        return Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Container(color: s2, child: const Center(child: Icon(Icons.play_circle_outline, size: 28, color: _textMuted))),
-                            Positioned(
-                              bottom: 4, left: 4, right: 4,
-                              child: Text(v['title'] ?? '', style: const TextStyle(color: Colors.white70, fontSize: 9), maxLines: 1, overflow: TextOverflow.ellipsis),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
+                      itemCount: 6,
+                      itemBuilder: (_, i) => Container(color: s2, child: const ShimmerBox(width: double.infinity, height: double.infinity, radius: 0)),
+                    )
+                  : currentData.isEmpty
+                      ? Center(child: Text(emptyText, style: TextStyle(color: muted, fontSize: 13)))
+                      : GridView.builder(
+                          padding: const EdgeInsets.all(2),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3, crossAxisSpacing: 2, mainAxisSpacing: 2, childAspectRatio: 0.56,
+                          ),
+                          itemCount: currentData.length,
+                          itemBuilder: (context, index) {
+                            final item = currentData[index];
+                            final video = (item['video'] as Map<String, dynamic>?) ?? item;
+                            final videoId = video['id']?.toString() ?? '';
+                            final title = (video['title'] ?? '').toString();
+                            final coverUrl = _coverUrls[videoId];
+                            return Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                if (coverUrl != null)
+                                  Image.network(coverUrl, fit: BoxFit.cover, errorBuilder: (_, e, s) => _gridPlaceholder(s2))
+                                else
+                                  _gridPlaceholder(s2),
+                                Container(
+                                  decoration: const BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [Colors.transparent, Colors.black54],
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 4, left: 4, right: 4,
+                                  child: Text(title, style: const TextStyle(color: Colors.white70, fontSize: 9), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _gridPlaceholder(Color bg) {
+    return Container(color: bg, child: const Center(child: Icon(Icons.play_circle_outline, size: 28, color: _textMuted)));
   }
 
   String _fmt(dynamic n) {

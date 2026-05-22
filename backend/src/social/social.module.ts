@@ -1,14 +1,18 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Like } from './like.entity';
 import { Comment } from './comment.entity';
 import { Follow } from './follow.entity';
 import { Video } from '../video/video.entity';
+import { NotificationModule } from '../notification/notification.module';
 import { SocialService } from './social.service';
 import { SocialController } from './social.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Like, Comment, Follow, Video])],
+  imports: [
+    TypeOrmModule.forFeature([Like, Comment, Follow, Video]),
+    forwardRef(() => NotificationModule),
+  ],
   controllers: [SocialController],
   providers: [SocialService],
   exports: [SocialService],

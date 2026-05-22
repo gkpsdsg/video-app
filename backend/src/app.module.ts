@@ -12,6 +12,9 @@ import { VideoModule } from './video/video.module';
 import { ReviewModule } from './review/review.module';
 import { SocialModule } from './social/social.module';
 import { SearchModule } from './search/search.module';
+import { BookmarkModule } from './bookmark/bookmark.module';
+import { NotificationModule } from './notification/notification.module';
+import { MessageModule } from './message/message.module';
 import { RankingModule } from './ranking/ranking.module';
 
 @Module({
@@ -51,6 +54,9 @@ import { RankingModule } from './ranking/ranking.module';
     ReviewModule,
     SocialModule,
     SearchModule,
+    BookmarkModule,
+    NotificationModule,
+    MessageModule,
     RankingModule,
   ],
   controllers: [AppController],
