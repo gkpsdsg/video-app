@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bull';
@@ -87,9 +87,13 @@ export class VideoService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async delete(id: string) {
+  async delete(id: string, userId: string, role: string) {
     const video = await this.videoRepo.findOne({ where: { id } });
     if (!video) throw new NotFoundException('视频不存在');
+
+    if (video.authorId !== userId && role !== 'admin') {
+      throw new ForbiddenException('无权删除此视频');
+    }
 
     // Delete from MinIO
     try { await this.minioService.deleteFile(video.minioObjectName); } catch {}

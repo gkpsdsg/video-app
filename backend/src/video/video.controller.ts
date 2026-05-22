@@ -16,7 +16,6 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { AdminGuard } from '../auth/admin.guard';
 import { VideoService } from './video.service';
 
 @ApiTags('视频')
@@ -70,10 +69,10 @@ export class VideoController {
   }
 
   @Delete(':id')
-  @UseGuards(AdminGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '删除视频（管理员）' })
-  delete(@Param('id') id: string) {
-    return this.videoService.delete(id);
+  @ApiOperation({ summary: '删除视频（作者或管理员）' })
+  delete(@Param('id') id: string, @Req() req: any) {
+    return this.videoService.delete(id, req.user.id, req.user.role);
   }
 }

@@ -116,6 +116,18 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
+  void _onVideoDeleted(String videoId) {
+    final idx = _videos.indexWhere((v) => v.id == videoId);
+    if (idx < 0) return;
+    setState(() {
+      _videos.removeAt(idx);
+      _videoKeys.remove(videoId);
+      if (_currentPage >= _videos.length) {
+        _currentPage = (_videos.length - 1).clamp(0, _videos.length);
+      }
+    });
+  }
+
   void _togglePlayPause() {
     HapticFeedback.lightImpact();
     setState(() => _isPlaying = !_isPlaying);
@@ -180,12 +192,14 @@ class _FeedScreenState extends State<FeedScreen> {
             itemBuilder: (context, index) {
               final video = _videos[index];
               final key = _videoKeys.putIfAbsent(video.id, () => GlobalKey<_VideoPlayerWidgetState>());
+              final vId = video.id;
               return _VideoPlayerWidget(
                 key: key,
                 video: video,
                 isCurrent: index == _currentPage,
                 isGloballyPlaying: _isPlaying,
                 onPlayPauseChanged: _onPlayPauseChanged,
+                onVideoDeleted: () => _onVideoDeleted(vId),
               );
             },
           ),
@@ -279,12 +293,14 @@ class _VideoPlayerWidget extends StatefulWidget {
   final bool isCurrent;
   final bool isGloballyPlaying;
   final ValueChanged<bool> onPlayPauseChanged;
+  final VoidCallback? onVideoDeleted;
 
   const _VideoPlayerWidget({
     required this.video,
     required this.isCurrent,
     required this.isGloballyPlaying,
     required this.onPlayPauseChanged,
+    this.onVideoDeleted,
     super.key,
   });
 
@@ -307,6 +323,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
   bool _isFollowing = false;
   bool _bookmarkLoading = false;
   bool _isAdmin = false;
+  bool _isAuthor = false;
   Widget? _heartBurst;
 
   @override
@@ -314,7 +331,9 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     super.initState();
     _likeCount = widget.video.likeCount;
     _commentCount = widget.video.commentCount;
-    _isAdmin = context.read<AuthProvider>().user?['role'] == 'admin';
+    final auth = context.read<AuthProvider>();
+    _isAdmin = auth.user?['role'] == 'admin';
+    _isAuthor = auth.user?['id']?.toString() == widget.video.author['id']?.toString();
     _checkLikeStatus();
     _checkBookmarkStatus();
     _fetchBookmarkCount();
@@ -458,6 +477,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('视频已删除'), behavior: SnackBarBehavior.floating),
         );
+        widget.onVideoDeleted?.call();
       }
     } catch (_) {
       if (mounted) {
@@ -788,7 +808,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
                       ),
                     ],
                   ),
-                  if (_isAdmin) ...[
+                  if (_isAdmin || _isAuthor) ...[
                     const SizedBox(height: 10),
                     GestureDetector(
                       onTap: _deleteVideo,
