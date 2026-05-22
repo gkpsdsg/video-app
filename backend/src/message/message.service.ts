@@ -24,12 +24,15 @@ export class MessageService {
     });
 
     if (!conversation) {
-      conversation = this.convRepo.create({ participant1Id: p1, participant2Id: p2 });
+      conversation = this.convRepo.create({
+        participant1Id: p1,
+        participant2Id: p2,
+        lastMessageAt: new Date(),
+      });
       await this.convRepo.save(conversation);
+    } else {
+      await this.convRepo.update(conversation.id, { lastMessageAt: new Date() });
     }
-
-    conversation.lastMessageAt = new Date();
-    await this.convRepo.save(conversation);
 
     const message = this.msgRepo.create({ conversationId: conversation.id, senderId, content });
     await this.msgRepo.save(message);

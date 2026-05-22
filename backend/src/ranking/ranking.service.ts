@@ -20,43 +20,44 @@ export class RankingService {
     const hotCount = Math.floor(limit / 2);
     const randomCount = limit - hotCount;
 
-    // 1. Fetch hot-ranked video IDs from Redis
-    const members = await this.redisService.zRangeWithScores(this.HOT_KEY, 0, 99, { REV: true });
-    const hotIds = members.map((m: Record<string, unknown>) => m.value as string);
+    const [hotVideos, randomVideos, total] = await Promise.all([
+      // Hot picks: random slice from Redis ZSET top 100
+      (async () => {
+        const members = await this.redisService.zRangeWithScores(this.HOT_KEY, 0, 99, { REV: true });
+        const hotIds = members.map((m: Record<string, unknown>) => m.value as string);
+        const shuffled = hotIds.sort(() => Math.random() - 0.5).slice(0, hotCount);
+        if (shuffled.length === 0) return [];
+        return this.videoRepo.find({
+          where: { id: In(shuffled), status: VideoStatus.READY },
+          relations: ['author'],
+        });
+      })(),
+      // Random picks: DB-level random sample
+      this.videoRepo
+        .createQueryBuilder('v')
+        .leftJoinAndSelect('v.author', 'author')
+        .where('v.status = :status', { status: VideoStatus.READY })
+        .orderBy('RANDOM()')
+        .take(randomCount)
+        .getMany(),
+      this.videoRepo.count({ where: { status: VideoStatus.READY } }),
+    ]);
 
-    // 2. Pick a random slice of hot videos (different each call, even on page 1)
-    const shuffledHot = hotIds.sort(() => Math.random() - 0.5);
-    const pickedHot = shuffledHot.slice(0, hotCount);
-
-    // 3. Fetch random videos from DB (excluding hot picks)
-    const allVideos = await this.videoRepo.find({
-      where: { status: VideoStatus.READY },
-      relations: ['author'],
-    });
-
-    const hotSet = new Set(pickedHot);
-    const nonHot = allVideos.filter((v) => !hotSet.has(v.id));
-    const shuffledNonHot = nonHot.sort(() => Math.random() - 0.5);
-    const pickedRandom = shuffledNonHot.slice(0, randomCount);
-
-    // 4. Combine hot videos with their full data
-    const hotVideos = allVideos.filter((v) => hotSet.has(v.id));
-    const hotMap = new Map(hotVideos.map((v) => [v.id, v]));
-    const hotSorted = pickedHot.map((id) => hotMap.get(id)).filter(Boolean);
-
-    // 5. Interleave: hot and random mixed evenly
+    // Interleave: hot and random mixed evenly
+    const hotQueue = [...hotVideos];
+    const randQueue = [...randomVideos];
     const mixed: Video[] = [];
     for (let i = 0; i < limit; i++) {
-      if (i % 2 === 0 && hotSorted.length > 0) {
-        mixed.push(hotSorted.shift()!);
-      } else if (pickedRandom.length > 0) {
-        mixed.push(pickedRandom.shift()!);
-      } else if (hotSorted.length > 0) {
-        mixed.push(hotSorted.shift()!);
+      if (i % 2 === 0 && hotQueue.length > 0) {
+        mixed.push(hotQueue.shift()!);
+      } else if (randQueue.length > 0) {
+        mixed.push(randQueue.shift()!);
+      } else if (hotQueue.length > 0) {
+        mixed.push(hotQueue.shift()!);
       }
     }
 
-    return { items: mixed, total: allVideos.length, page, limit };
+    return { items: mixed, total, page, limit };
   }
 
   async getFollowingVideos(userId: string, page: number = 1, limit: number = 20) {

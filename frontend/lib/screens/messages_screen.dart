@@ -2,25 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import '../widgets/shimmer_box.dart';
+import '../constants/app_colors.dart';
 import 'chat_screen.dart';
 
-const _red = Color(0xFFFE2C55);
-const _dkS1 = Color(0xFF111111);
-const _dkS2 = Color(0xFF161616);
-const _dkBorder = Color(0xFF2A2A2A);
-const _textMuted = Color(0xFF8A8A8A);
-const _textSecondary = Color(0xFFB0B0B0);
-
-const _avatarGradients = [
-  [Color(0xFFFE2C55), Color(0xFFFF4D6A)],
-  [Color(0xFFF59E0B), Color(0xFFF97316)],
-  [Color(0xFF8B5CF6), Color(0xFFA855F7)],
-  [Color(0xFF06B6D4), Color(0xFF0EA5E9)],
-  [Color(0xFF22C55E), Color(0xFF4ADE80)],
-  [Color(0xFF3B82F6), Color(0xFF60A5FA)],
-  [Color(0xFFEC4899), Color(0xFFF472B6)],
-  [Color(0xFF10B981), Color(0xFF14B8A6)],
-];
+const _red = appRed;
+const _dkS1 = dkSurface1;
+const _dkS2 = dkSurface2;
+const _dkBorder = dkBorder;
+const _textMuted = textMuted;
+const _textSecondary = textSecondary;
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
@@ -250,7 +240,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           final name = (other['nickname'] ?? other['username'] ?? '用户').toString();
           final lastMsg = c['lastMessage'] is Map<String, dynamic> ? c['lastMessage'] as Map<String, dynamic> : null;
           final preview = lastMsg?['content']?.toString() ?? '开始聊天';
-          final grad = _avatarGradients[index % _avatarGradients.length];
+          final grad = avatarGradients[index % avatarGradients.length];
 
           return ListTile(
             onTap: () => _openChat(c),
@@ -312,7 +302,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         final n = _notifications[index];
         final actor = n['actor'] is Map<String, dynamic> ? n['actor'] : <String, dynamic>{};
         final name = (actor['nickname'] ?? actor['username'] ?? '用户').toString();
-        final grad = _avatarGradients[index % _avatarGradients.length];
+        final grad = avatarGradients[index % avatarGradients.length];
         final isRead = n['isRead'] == true;
 
         IconData icon;
@@ -527,7 +517,7 @@ class _NewChatSheetState extends State<_NewChatSheet> {
         final name = (user['nickname'] ?? user['username'] ?? '用户').toString();
         final username = user['username']?.toString() ?? '';
         final bio = user['bio']?.toString() ?? '';
-        final grad = _avatarGradients[index % _avatarGradients.length];
+        final grad = avatarGradients[index % avatarGradients.length];
 
         return ListTile(
           onTap: () => widget.onUserSelected(user),

@@ -57,7 +57,6 @@ export class SocialService {
     await this.commentRepo.save(comment);
     await this.videoRepo.increment({ id: videoId }, 'commentCount', 1);
 
-    // Trigger notification: reply → parent comment author; top-level → video author
     if (this.notificationService) {
       if (parentAuthorId && parentAuthorId !== userId) {
         await this.notificationService.create(parentAuthorId, userId, NotificationType.COMMENT, videoId);

@@ -3,22 +3,12 @@ import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/shimmer_box.dart';
+import '../constants/app_colors.dart';
 
-const _red = Color(0xFFFE2C55);
-const _dkS1 = Color(0xFF111111);
-const _dkS2 = Color(0xFF161616);
-const _textMuted = Color(0xFF8A8A8A);
-
-const _avatarGradients = [
-  [Color(0xFFFE2C55), Color(0xFFFF4D6A)],
-  [Color(0xFFF59E0B), Color(0xFFF97316)],
-  [Color(0xFF8B5CF6), Color(0xFFA855F7)],
-  [Color(0xFF06B6D4), Color(0xFF0EA5E9)],
-  [Color(0xFF22C55E), Color(0xFF4ADE80)],
-  [Color(0xFF3B82F6), Color(0xFF60A5FA)],
-  [Color(0xFFEC4899), Color(0xFFF472B6)],
-  [Color(0xFF10B981), Color(0xFF14B8A6)],
-];
+const _red = appRed;
+const _dkS1 = dkSurface1;
+const _dkS2 = dkSurface2;
+const _textMuted = textMuted;
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
@@ -118,17 +108,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final name = (widget.otherParticipant['nickname'] ?? widget.otherParticipant['username'] ?? '用户').toString();
     final initial = name.characters.first.toUpperCase();
-    final grad = _avatarGradients[name.hashCode.abs() % _avatarGradients.length];
+    final grad = avatarGradients[name.hashCode.abs() % avatarGradients.length];
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return PopScope(
-      canPop: true,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop && _messages.isNotEmpty) {
-          // Will trigger refresh in messages_screen via .then()
-        }
-      },
-      child: Scaffold(
+    return Scaffold(
         backgroundColor: _dkS1,
         appBar: AppBar(
           backgroundColor: _dkS1,
@@ -203,7 +186,6 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
-      ),
     );
   }
 
@@ -256,7 +238,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final isSent = sender['id']?.toString() == currentUserId;
         final senderName = (sender['nickname'] ?? sender['username'] ?? '').toString();
         final initial = senderName.isNotEmpty ? senderName.characters.first.toUpperCase() : '?';
-        final grad = _avatarGradients[senderName.hashCode.abs() % _avatarGradients.length];
+        final grad = avatarGradients[senderName.hashCode.abs() % avatarGradients.length];
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),

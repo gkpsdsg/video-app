@@ -60,10 +60,18 @@ class _FriendsScreenState extends State<FriendsScreen> {
     });
 
     _api.dio.post('/follow/$userId').then((res) {
-      if (mounted && res.data['following'] == false) {
-        _loadFollowing();
+      if (mounted) {
+        setState(() {
+          item['_following'] = res.data['following'] == true;
+        });
       }
-    }).catchError((_) {});
+    }).catchError((_) {
+      if (mounted) {
+        setState(() {
+          item['_following'] = !(item['_following'] == true);
+        });
+      }
+    });
   }
 
   @override

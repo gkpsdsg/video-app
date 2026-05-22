@@ -96,15 +96,18 @@ export class VideoService {
     }
 
     // Delete from MinIO
-    try { await this.minioService.deleteFile(video.minioObjectName); } catch {}
-    if (video.coverObjectName) {
-      try { await this.minioService.deleteFile(video.coverObjectName); } catch {}
-    }
+    await Promise.all([
+      this.minioService.deleteFile(video.minioObjectName).catch(() => {}),
+      video.coverObjectName
+        ? this.minioService.deleteFile(video.coverObjectName).catch(() => {})
+        : Promise.resolve(),
+    ]);
 
-    // Cascade delete related data
-    await this.commentRepo.delete({ videoId: id });
-    await this.likeRepo.delete({ videoId: id });
-    await this.bookmarkRepo.delete({ videoId: id });
+    await Promise.all([
+      this.commentRepo.delete({ videoId: id }),
+      this.likeRepo.delete({ videoId: id }),
+      this.bookmarkRepo.delete({ videoId: id }),
+    ]);
 
     // Delete the video record
     await this.videoRepo.remove(video);
