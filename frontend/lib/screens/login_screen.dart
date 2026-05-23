@@ -68,6 +68,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     if (auth.isLoggedIn && mounted) {
       Navigator.of(context).pushReplacementNamed('/home');
+    } else if (auth.error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.error!), behavior: SnackBarBehavior.floating, backgroundColor: Colors.red[700]),
+      );
     }
   }
 

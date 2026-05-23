@@ -20,9 +20,9 @@ async function bootstrap() {
   app.enableCors();
 
   await app.listen(process.env.PORT ?? 3000);
-  console.log(`App running at http://localhost:${process.env.PORT ?? 3000}`);
-  console.log(
-    `Swagger docs at http://localhost:${process.env.PORT ?? 3000}/api`,
-  );
+  const port = process.env.PORT ?? 3000;
+  console.log(`App running at http://localhost:${port}`);
+  console.log(`Swagger docs at http://localhost:${port}/api`);
+  console.log(`MinIO endpoint: ${process.env.MINIO_ENDPOINT ?? 'localhost'}:${process.env.MINIO_PORT ?? 9000}`);
 }
 bootstrap();
