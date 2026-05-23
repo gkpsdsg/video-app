@@ -8,6 +8,7 @@ class DouyinTopBar extends StatelessWidget {
   final ValueChanged<int> onTabChanged;
   final VoidCallback onSearch;
   final VoidCallback onLive;
+  final VoidCallback? onBack;
 
   const DouyinTopBar({
     super.key,
@@ -15,6 +16,7 @@ class DouyinTopBar extends StatelessWidget {
     required this.onTabChanged,
     required this.onSearch,
     required this.onLive,
+    this.onBack,
   });
 
   @override
@@ -25,7 +27,22 @@ class DouyinTopBar extends StatelessWidget {
         padding: const EdgeInsets.only(top: 8, bottom: 4),
         child: Row(
           children: [
-            const SizedBox(width: 8),
+            if (onBack != null) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: onBack,
+                child: Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black.withValues(alpha: 0.45),
+                  ),
+                  child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ] else
+              const SizedBox(width: 8),
             // Tabs
             _TopTab(label: '推荐', active: activeIndex == 1, onTap: () {
               HapticFeedback.selectionClick();

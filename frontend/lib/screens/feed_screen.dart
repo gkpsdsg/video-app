@@ -37,14 +37,17 @@ class VideoItem {
 }
 
 class FeedScreen extends StatefulWidget {
-  const FeedScreen({super.key});
+  final List<VideoItem>? initialVideos;
+  final int initialIndex;
+
+  const FeedScreen({super.key, this.initialVideos, this.initialIndex = 0});
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  final _pageController = PageController();
+  late final PageController _pageController;
   final _api = ApiService();
   List<VideoItem> _videos = [];
   int _currentPage = 0;
@@ -59,7 +62,15 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchVideos();
+    if (widget.initialVideos != null && widget.initialVideos!.isNotEmpty) {
+      _videos = widget.initialVideos!;
+      _currentPage = widget.initialIndex.clamp(0, _videos.length - 1);
+      _pageController = PageController(initialPage: _currentPage);
+      _isLoading = false;
+    } else {
+      _pageController = PageController();
+      _fetchVideos();
+    }
   }
 
   @override
@@ -221,6 +232,12 @@ class _FeedScreenState extends State<FeedScreen> {
                   const SnackBar(content: Text('暂无直播'), behavior: SnackBarBehavior.floating),
                 );
               },
+              onBack: widget.initialVideos != null
+                  ? () {
+                      HapticFeedback.lightImpact();
+                      Navigator.of(context).pop();
+                    }
+                  : null,
             ),
           ),
           // Bottom control bar
@@ -620,6 +637,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
 
   Future<void> _showCommentSheet() async {
     HapticFeedback.lightImpact();
+    if (!mounted) return;
     final api = ApiService();
     // ignore: use_build_context_synchronously
     await showModalBottomSheet<void>(
@@ -1033,6 +1051,7 @@ class _CommentSheetState extends State<_CommentSheet> {
       final data = <String, dynamic>{'content': content};
       if (_replyToId != null) data['parentId'] = _replyToId;
       await widget.api.dio.post('/comment/${widget.videoId}', data: data);
+      if (!mounted) return;
       _textController.clear();
       widget.onCommentCountChanged(1);
       _replyToId = null;
@@ -1051,7 +1070,7 @@ class _CommentSheetState extends State<_CommentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom.clamp(0.0, 600.0);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.6 + bottomInset,

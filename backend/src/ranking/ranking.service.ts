@@ -32,14 +32,22 @@ export class RankingService {
           relations: ['author'],
         });
       })(),
-      // Random picks: DB-level random sample
-      this.videoRepo
-        .createQueryBuilder('v')
-        .leftJoinAndSelect('v.author', 'author')
-        .where('v.status = :status', { status: VideoStatus.READY })
-        .orderBy('RANDOM()')
-        .take(randomCount)
-        .getMany(),
+      // Random picks: two-step avoids DISTINCT + RANDOM() PostgreSQL error
+      (async () => {
+        if (randomCount <= 0) return [];
+        const ids = await this.videoRepo
+          .createQueryBuilder('v')
+          .select('v.id')
+          .where('v.status = :status', { status: VideoStatus.READY })
+          .orderBy('RANDOM()')
+          .take(randomCount)
+          .getRawMany<{ v_id: string }>();
+        if (ids.length === 0) return [];
+        return this.videoRepo.find({
+          where: { id: In(ids.map((r) => r.v_id)) },
+          relations: ['author'],
+        });
+      })(),
       this.videoRepo.count({ where: { status: VideoStatus.READY } }),
     ]);
 

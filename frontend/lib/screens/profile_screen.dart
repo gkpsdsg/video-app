@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/shimmer_box.dart';
+import 'feed_screen.dart';
 
 const _red = Color(0xFFFE2C55);
 const _dkS2 = Color(0xFF161616);
@@ -15,10 +16,10 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  State<ProfileScreen> createState() => ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class ProfileScreenState extends State<ProfileScreen> {
   final _api = ApiService();
   Map<String, dynamic>? _profile;
   List<Map<String, dynamic>> _videos = [];
@@ -69,7 +70,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadLikedVideos() async {
-    if (_likesLoading || _likedVideos.isNotEmpty) return;
+    if (_likesLoading) return;
     setState(() => _likesLoading = true);
     try {
       final user = context.read<AuthProvider>().user;
@@ -90,7 +91,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadBookmarkedVideos() async {
-    if (_bookmarksLoading || _bookmarkedVideos.isNotEmpty) return;
+    if (_bookmarksLoading) return;
     setState(() => _bookmarksLoading = true);
     try {
       final res = await _api.dio.get('/bookmarks');
@@ -134,6 +135,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _tabIndex = index);
     if (index == 1) _loadLikedVideos();
     if (index == 2) _loadBookmarkedVideos();
+  }
+
+  void refreshCurrentTab() {
+    _loadVideos();
+    if (_tabIndex == 1) _loadLikedVideos();
+    if (_tabIndex == 2) _loadBookmarkedVideos();
   }
 
   void _handleLogout() {
@@ -386,33 +393,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             final videoId = video['id']?.toString() ?? '';
                             final title = (video['title'] ?? '').toString();
                             final coverUrl = _coverUrls[videoId];
-                            return Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                if (coverUrl != null)
-                                  Image.network(coverUrl, fit: BoxFit.cover, errorBuilder: (_, e, s) => _gridPlaceholder(s2))
-                                else
-                                  _gridPlaceholder(s2),
-                                Container(
-                                  decoration: const BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [Colors.transparent, Colors.black54],
+                            return GestureDetector(
+                              onTap: () => _onVideoTap(currentData, index),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (coverUrl != null)
+                                    Image.network(coverUrl, fit: BoxFit.cover, errorBuilder: (_, e, s) => _gridPlaceholder(s2))
+                                  else
+                                    _gridPlaceholder(s2),
+                                  Container(
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [Colors.transparent, Colors.black54],
+                                      ),
                                     ),
                                   ),
-                                ),
-                                Positioned(
-                                  bottom: 4, left: 4, right: 4,
-                                  child: Text(title, style: const TextStyle(color: Colors.white70, fontSize: 9), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                ),
-                              ],
+                                  Positioned(
+                                    bottom: 4, left: 4, right: 4,
+                                    child: Text(title, style: const TextStyle(color: Colors.white70, fontSize: 9), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  ),
+                                ],
+                              ),
                             );
                           },
                         ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _onVideoTap(List<Map<String, dynamic>> items, int index) {
+    HapticFeedback.lightImpact();
+    final videoItems = items.map((item) {
+      final video = (item['video'] as Map<String, dynamic>?) ?? item;
+      return VideoItem(
+        id: video['id']?.toString() ?? '',
+        title: video['title'] ?? '',
+        author: video['author'] is Map<String, dynamic> ? video['author'] : <String, dynamic>{},
+        likeCount: video['likeCount'] ?? 0,
+        commentCount: video['commentCount'] ?? 0,
+      );
+    }).toList();
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FeedScreen(initialVideos: videoItems, initialIndex: index),
       ),
     );
   }

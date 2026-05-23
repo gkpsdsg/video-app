@@ -193,13 +193,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  final _profileKey = GlobalKey<ProfileScreenState>();
 
-  final _pages = const [
-    FeedScreen(),
-    FriendsScreen(),
-    SizedBox(),
-    MessagesScreen(),
-    ProfileScreen(),
+  late final _pages = [
+    const FeedScreen(),
+    const FriendsScreen(),
+    const SizedBox(),
+    const MessagesScreen(),
+    ProfileScreen(key: _profileKey),
   ];
 
   @override
@@ -222,55 +223,17 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.of(context).pushNamed('/upload').then((_) {});
               return;
             }
+            if (i == 4) {
+              _profileKey.currentState?.refreshCurrentTab();
+            }
             setState(() => _currentIndex = i);
           },
           items: List.generate(5, (i) {
             final tab = _navTabs[i];
-            Widget icon = Icon(tab.icon, size: 24);
-
-            // Badge on messages tab (index 3)
-            if (i == 3) {
-              icon = Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Icon(tab.icon, size: 24),
-                  Positioned(
-                    right: -6, top: -4,
-                    child: Container(
-                      width: 16, height: 16,
-                      decoration: const BoxDecoration(
-                        color: _red,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: Text('3', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
 
             return BottomNavigationBarItem(
-              icon: icon,
-              activeIcon: i == 3
-                  ? Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Icon(tab.activeIcon, size: 24),
-                        Positioned(
-                          right: -6, top: -4,
-                          child: Container(
-                            width: 16, height: 16,
-                            decoration: const BoxDecoration(color: _red, shape: BoxShape.circle),
-                            child: const Center(
-                              child: Text('3', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : Icon(tab.activeIcon, size: 24),
+              icon: Icon(tab.icon, size: 24),
+              activeIcon: Icon(tab.activeIcon, size: 24),
               label: tab.label,
             );
           }),
