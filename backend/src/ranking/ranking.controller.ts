@@ -10,7 +10,10 @@ export class RankingController {
 
   @Get('hot')
   @ApiOperation({ summary: '热门视频 Feed（热度排序）' })
-  getHotVideos(@Query('page') page: number = 1, @Query('limit') limit: number = 20) {
+  getHotVideos(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
     return this.rankingService.getHotVideos(+page, +limit);
   }
 

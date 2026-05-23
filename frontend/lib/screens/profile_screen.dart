@@ -395,6 +395,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                             final coverUrl = _coverUrls[videoId];
                             return GestureDetector(
                               onTap: () => _onVideoTap(currentData, index),
+                              onLongPress: _tabIndex == 0 ? () => _showVideoActions(video) : null,
                               child: Stack(
                                 fit: StackFit.expand,
                                 children: [
@@ -415,6 +416,22 @@ class ProfileScreenState extends State<ProfileScreen> {
                                     bottom: 4, left: 4, right: 4,
                                     child: Text(title, style: const TextStyle(color: Colors.white70, fontSize: 9), maxLines: 1, overflow: TextOverflow.ellipsis),
                                   ),
+                                  // Action button — visible on own profile's works tab
+                                  if (_tabIndex == 0)
+                                    Positioned(
+                                      bottom: 2, right: 2,
+                                      child: GestureDetector(
+                                        onTap: () => _showVideoActions(video),
+                                        child: Container(
+                                          width: 28, height: 28,
+                                          decoration: BoxDecoration(
+                                            color: Colors.black54,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: const Icon(Icons.more_horiz, color: Colors.white70, size: 16),
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
                             );
@@ -422,6 +439,140 @@ class ProfileScreenState extends State<ProfileScreen> {
                         ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showVideoActions(Map<String, dynamic> video) async {
+    final videoId = video['id']?.toString() ?? '';
+    final title = (video['title'] ?? '').toString();
+    final visibility = (video['visibility'] ?? 'public').toString();
+    final isPrivate = visibility == 'private';
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        decoration: const BoxDecoration(
+          color: _dkS2,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(color: _dkBorder, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 16),
+              Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: _red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.delete_outline, color: _red, size: 22),
+                ),
+                title: const Text('删除视频', style: TextStyle(color: _red, fontSize: 15)),
+                subtitle: const Text('此操作不可撤销', style: TextStyle(color: _textMuted, fontSize: 12)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogCtx) => AlertDialog(
+                      backgroundColor: _dkS2,
+                      title: const Text('删除视频', style: TextStyle(color: Colors.white)),
+                      content: Text('确定要删除「$title」吗？\n此操作不可撤销。',
+                          style: const TextStyle(color: _textMuted)),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('取消')),
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogCtx, true),
+                          child: const Text('删除', style: TextStyle(color: _red)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    try {
+                      await _api.dio.delete('/video/$videoId');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('视频已删除'), behavior: SnackBarBehavior.floating),
+                        );
+                        _loadVideos();
+                      }
+                    } catch (_) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('删除失败'), behavior: SnackBarBehavior.floating),
+                        );
+                      }
+                    }
+                  }
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: (isPrivate ? const Color(0xFF22C55E) : _textMuted).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    isPrivate ? Icons.visibility : Icons.visibility_off,
+                    color: isPrivate ? const Color(0xFF22C55E) : _textMuted,
+                    size: 22,
+                  ),
+                ),
+                title: Text(isPrivate ? '设为公开' : '设为私密',
+                    style: const TextStyle(color: Colors.white, fontSize: 15)),
+                subtitle: Text(isPrivate ? '所有人可见' : '仅自己可见',
+                    style: const TextStyle(color: _textMuted, fontSize: 12)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final newVis = isPrivate ? 'public' : 'private';
+                  try {
+                    await _api.dio.patch('/video/$videoId/visibility', data: {'visibility': newVis});
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(isPrivate ? '已设为公开' : '已设为私密'), behavior: SnackBarBehavior.floating),
+                      );
+                      _loadVideos();
+                    }
+                  } catch (_) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('操作失败'), behavior: SnackBarBehavior.floating),
+                      );
+                    }
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    backgroundColor: _dkBorder,
+                    foregroundColor: _textMuted,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('取消', style: TextStyle(fontSize: 15)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -444,7 +595,7 @@ class ProfileScreenState extends State<ProfileScreen> {
       MaterialPageRoute(
         builder: (_) => FeedScreen(initialVideos: videoItems, initialIndex: index),
       ),
-    );
+    ).then((_) => refreshCurrentTab());
   }
 
   Widget _gridPlaceholder(Color bg) {

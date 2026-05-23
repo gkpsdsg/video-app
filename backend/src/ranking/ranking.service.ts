@@ -3,7 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { RedisService } from '../redis/redis.service';
-import { Video, VideoStatus } from '../video/video.entity';
+import { Video, VideoStatus, VideoVisibility } from '../video/video.entity';
 import { Follow } from '../social/follow.entity';
 
 @Injectable()
@@ -23,12 +23,25 @@ export class RankingService {
     const [hotVideos, randomVideos, total] = await Promise.all([
       // Hot picks: random slice from Redis ZSET top 100
       (async () => {
-        const members = await this.redisService.zRangeWithScores(this.HOT_KEY, 0, 99, { REV: true });
-        const hotIds = members.map((m: Record<string, unknown>) => m.value as string);
-        const shuffled = hotIds.sort(() => Math.random() - 0.5).slice(0, hotCount);
+        const members = await this.redisService.zRangeWithScores(
+          this.HOT_KEY,
+          0,
+          99,
+          { REV: true },
+        );
+        const hotIds = members.map(
+          (m: Record<string, unknown>) => m.value as string,
+        );
+        const shuffled = hotIds
+          .sort(() => Math.random() - 0.5)
+          .slice(0, hotCount);
         if (shuffled.length === 0) return [];
         return this.videoRepo.find({
-          where: { id: In(shuffled), status: VideoStatus.READY },
+          where: {
+            id: In(shuffled),
+            status: VideoStatus.READY,
+            visibility: VideoVisibility.PUBLIC,
+          },
           relations: ['author'],
         });
       })(),
@@ -38,7 +51,10 @@ export class RankingService {
         const ids = await this.videoRepo
           .createQueryBuilder('v')
           .select('v.id')
-          .where('v.status = :status', { status: VideoStatus.READY })
+          .where('v.status = :status', {
+            status: VideoStatus.READY,
+            visibility: VideoVisibility.PUBLIC,
+          })
           .orderBy('RANDOM()')
           .take(randomCount)
           .getRawMany<{ v_id: string }>();
@@ -48,7 +64,12 @@ export class RankingService {
           relations: ['author'],
         });
       })(),
-      this.videoRepo.count({ where: { status: VideoStatus.READY } }),
+      this.videoRepo.count({
+        where: {
+          status: VideoStatus.READY,
+          visibility: VideoVisibility.PUBLIC,
+        },
+      }),
     ]);
 
     // Interleave: hot and random mixed evenly
@@ -68,8 +89,14 @@ export class RankingService {
     return { items: mixed, total, page, limit };
   }
 
-  async getFollowingVideos(userId: string, page: number = 1, limit: number = 20) {
-    const follows = await this.followRepo.find({ where: { followerId: userId } });
+  async getFollowingVideos(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ) {
+    const follows = await this.followRepo.find({
+      where: { followerId: userId },
+    });
     const followingIds = follows.map((f) => f.followingId);
 
     if (followingIds.length === 0) {
@@ -77,7 +104,11 @@ export class RankingService {
     }
 
     const [items, total] = await this.videoRepo.findAndCount({
-      where: { authorId: In(followingIds), status: VideoStatus.READY },
+      where: {
+        authorId: In(followingIds),
+        status: VideoStatus.READY,
+        visibility: VideoVisibility.PUBLIC,
+      },
       relations: ['author'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
@@ -89,7 +120,7 @@ export class RankingService {
   @Cron('*/30 * * * *')
   async updateHotRanking() {
     const videos = await this.videoRepo.find({
-      where: { status: VideoStatus.READY },
+      where: { status: VideoStatus.READY, visibility: VideoVisibility.PUBLIC },
     });
 
     const now = Date.now();

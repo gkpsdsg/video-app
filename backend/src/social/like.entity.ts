@@ -6,12 +6,15 @@ import {
   ManyToOne,
   JoinColumn,
   Unique,
+  Index,
 } from 'typeorm';
 import { User } from '../auth/user.entity';
 import { Video } from '../video/video.entity';
 
 @Entity('likes')
 @Unique(['userId', 'videoId'])
+@Index(['videoId'])
+@Index(['userId'])
 export class Like {
   @PrimaryGeneratedColumn('uuid')
   id: string;

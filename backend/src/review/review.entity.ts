@@ -20,7 +20,11 @@ export class Review {
   @Column()
   videoId: string;
 
-  @Column({ type: 'enum', enum: ['pending', 'passed', 'rejected'], default: 'pending' })
+  @Column({
+    type: 'enum',
+    enum: ['pending', 'passed', 'rejected'],
+    default: 'pending',
+  })
   status: string;
 
   @Column({ nullable: true })

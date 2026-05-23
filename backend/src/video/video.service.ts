@@ -1,11 +1,15 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 import { v4 as uuidv4 } from 'uuid';
 import { MinioService } from '../minio/minio.service';
-import { Video, VideoStatus } from './video.entity';
+import { Video, VideoStatus, VideoVisibility } from './video.entity';
 import { Comment } from '../social/comment.entity';
 import { Like } from '../social/like.entity';
 import { Bookmark } from '../bookmark/bookmark.entity';
@@ -44,7 +48,7 @@ export class VideoService {
 
   async findAll(page: number = 1, limit: number = 20) {
     const [items, total] = await this.videoRepo.findAndCount({
-      where: { status: VideoStatus.READY },
+      where: { status: VideoStatus.READY, visibility: VideoVisibility.PUBLIC },
       relations: ['author'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
@@ -85,6 +89,21 @@ export class VideoService {
       take: limit,
     });
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async updateVisibility(
+    id: string,
+    userId: string,
+    role: string,
+    visibility: VideoVisibility,
+  ) {
+    const video = await this.videoRepo.findOne({ where: { id } });
+    if (!video) throw new NotFoundException('视频不存在');
+    if (video.authorId !== userId && role !== 'admin') {
+      throw new ForbiddenException('无权修改此视频');
+    }
+    await this.videoRepo.update(id, { visibility });
+    return { id, visibility };
   }
 
   async delete(id: string, userId: string, role: string) {

@@ -1,4 +1,13 @@
-import { Controller, Post, Get, Param, Query, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SocialService } from './social.service';
@@ -22,6 +31,12 @@ export class SocialController {
     return this.socialService.getLikeStatus(videoId, req.user.id);
   }
 
+  @Post('batch-status')
+  @ApiOperation({ summary: '批量查询点赞/收藏/关注状态及收藏数' })
+  getBatchStatus(@Req() req: any, @Body('videoIds') videoIds: string[]) {
+    return this.socialService.getBatchStatus(videoIds ?? [], req.user.id);
+  }
+
   @Post('comment/:videoId')
   @ApiOperation({ summary: '发表评论' })
   addComment(
@@ -30,7 +45,12 @@ export class SocialController {
     @Body('content') content: string,
     @Body('parentId') parentId?: string,
   ) {
-    return this.socialService.addComment(videoId, req.user.id, content, parentId);
+    return this.socialService.addComment(
+      videoId,
+      req.user.id,
+      content,
+      parentId,
+    );
   }
 
   @Get('comment/:videoId')
@@ -57,13 +77,21 @@ export class SocialController {
 
   @Get('followers')
   @ApiOperation({ summary: '我的粉丝列表' })
-  getFollowers(@Req() req: any, @Query('page') page: number = 1, @Query('limit') limit: number = 20) {
+  getFollowers(
+    @Req() req: any,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
     return this.socialService.getFollowers(req.user.id, +page, +limit);
   }
 
   @Get('following')
   @ApiOperation({ summary: '我关注的人列表' })
-  getFollowing(@Req() req: any, @Query('page') page: number = 1, @Query('limit') limit: number = 20) {
+  getFollowing(
+    @Req() req: any,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
     return this.socialService.getFollowing(req.user.id, +page, +limit);
   }
 

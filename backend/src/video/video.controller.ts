@@ -3,8 +3,10 @@ import {
   Post,
   Get,
   Delete,
+  Patch,
   Param,
   Query,
+  Body,
   UseGuards,
   Req,
   UseInterceptors,
@@ -17,6 +19,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { VideoService } from './video.service';
+import { VideoVisibility } from './video.entity';
 
 @ApiTags('视频')
 @Controller('video')
@@ -66,6 +69,23 @@ export class VideoController {
   @ApiOperation({ summary: '获取视频封面签名 URL' })
   getCoverUrl(@Param('id') id: string) {
     return this.videoService.getCoverUrl(id);
+  }
+
+  @Patch(':id/visibility')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '切换视频可见性（作者或管理员）' })
+  updateVisibility(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body('visibility') visibility: VideoVisibility,
+  ) {
+    return this.videoService.updateVisibility(
+      id,
+      req.user.id,
+      req.user.role,
+      visibility,
+    );
   }
 
   @Delete(':id')

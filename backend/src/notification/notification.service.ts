@@ -16,7 +16,12 @@ export class NotificationService {
     targetId?: string,
   ) {
     if (recipientId === actorId) return null;
-    const notif = this.notifRepo.create({ recipientId, actorId, type, targetId });
+    const notif = this.notifRepo.create({
+      recipientId,
+      actorId,
+      type,
+      targetId,
+    });
     return this.notifRepo.save(notif);
   }
 
@@ -32,7 +37,9 @@ export class NotificationService {
   }
 
   async getUnreadCount(userId: string) {
-    const count = await this.notifRepo.count({ where: { recipientId: userId, isRead: false } });
+    const count = await this.notifRepo.count({
+      where: { recipientId: userId, isRead: false },
+    });
     return { count };
   }
 

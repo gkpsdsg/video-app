@@ -6,11 +6,14 @@ import {
   ManyToOne,
   JoinColumn,
   Unique,
+  Index,
 } from 'typeorm';
 import { User } from '../auth/user.entity';
 
 @Entity('follows')
 @Unique(['followerId', 'followingId'])
+@Index(['followerId'])
+@Index(['followingId'])
 export class Follow {
   @PrimaryGeneratedColumn('uuid')
   id: string;

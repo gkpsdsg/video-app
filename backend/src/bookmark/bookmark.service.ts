@@ -10,7 +10,9 @@ export class BookmarkService {
   ) {}
 
   async toggleBookmark(videoId: string, userId: string) {
-    const existing = await this.bookmarkRepo.findOne({ where: { videoId, userId } });
+    const existing = await this.bookmarkRepo.findOne({
+      where: { videoId, userId },
+    });
     if (existing) {
       await this.bookmarkRepo.remove(existing);
       return { bookmarked: false };
@@ -20,7 +22,9 @@ export class BookmarkService {
   }
 
   async getBookmarkStatus(videoId: string, userId: string) {
-    const existing = await this.bookmarkRepo.findOne({ where: { videoId, userId } });
+    const existing = await this.bookmarkRepo.findOne({
+      where: { videoId, userId },
+    });
     return { bookmarked: !!existing };
   }
 

@@ -19,7 +19,11 @@ export class ReviewService {
   ) {}
 
   async submitForReview(videoId: string) {
-    const review = this.reviewRepo.create({ videoId, status: 'pending', reviewType: 'auto' });
+    const review = this.reviewRepo.create({
+      videoId,
+      status: 'pending',
+      reviewType: 'auto',
+    });
     await this.reviewRepo.save(review);
     await this.videoQueue.add('auto-review', { videoId, reviewId: review.id });
     return review;
@@ -28,16 +32,27 @@ export class ReviewService {
   async autoReview(videoId: string, reviewId: string) {
     const video = await this.videoRepo.findOne({ where: { id: videoId } });
     if (!video) {
-      await this.reviewRepo.update(reviewId, { status: 'rejected', reason: '视频不存在' });
+      await this.reviewRepo.update(reviewId, {
+        status: 'rejected',
+        reason: '视频不存在',
+      });
       return { passed: false, reviewId, reason: '视频不存在' };
     }
 
     try {
-      const videoUrl = await this.minioService.getFileUrl(video.minioObjectName, 3600);
+      const videoUrl = await this.minioService.getFileUrl(
+        video.minioObjectName,
+        3600,
+      );
 
-      console.log(`[审核] 提交视频到阿里云内容安全: ${videoId} URL: ${videoUrl.substring(0, 80)}...`);
+      console.log(
+        `[审核] 提交视频到阿里云内容安全: ${videoId} URL: ${videoUrl.substring(0, 80)}...`,
+      );
 
-      const { taskId } = await this.alibabaGreenService.videoAsyncScan(videoUrl, videoId);
+      const { taskId } = await this.alibabaGreenService.videoAsyncScan(
+        videoUrl,
+        videoId,
+      );
       console.log(`[审核] 阿里云返回 taskId: ${taskId}`);
 
       // Poll for results (retry up to 5 times, 3s interval)
@@ -45,16 +60,26 @@ export class ReviewService {
       for (let i = 0; i < 5; i++) {
         await new Promise((r) => setTimeout(r, 3000));
         result = await this.alibabaGreenService.getVideoResults(taskId);
-        if (result.reason !== '审核处理中' && result.reason !== '审核查询中') break;
+        if (result.reason !== '审核处理中' && result.reason !== '审核查询中')
+          break;
       }
 
-      console.log(`[审核] 结果 videoId=${videoId}: passed=${result.passed} reason=${result.reason}`);
+      console.log(
+        `[审核] 结果 videoId=${videoId}: passed=${result.passed} reason=${result.reason}`,
+      );
 
       if (result.passed) {
-        await this.reviewRepo.update(reviewId, { status: 'passed', reason: '机审通过' });
+        await this.reviewRepo.update(reviewId, {
+          status: 'passed',
+          reason: '机审通过',
+        });
         await this.videoRepo.update(videoId, { status: VideoStatus.READY });
       } else {
-        await this.reviewRepo.update(reviewId, { status: 'pending', reviewType: 'manual', reason: result.reason || '机审未通过' });
+        await this.reviewRepo.update(reviewId, {
+          status: 'pending',
+          reviewType: 'manual',
+          reason: result.reason || '机审未通过',
+        });
         await this.videoRepo.update(videoId, { status: VideoStatus.BLOCKED });
       }
 
@@ -64,7 +89,11 @@ export class ReviewService {
       console.error(`[审核] 阿里云 API 调用失败:`, msg);
 
       // Fail closed: require manual review on API failure
-      await this.reviewRepo.update(reviewId, { status: 'pending', reviewType: 'manual', reason: '机审API不可用，等待人工审核' });
+      await this.reviewRepo.update(reviewId, {
+        status: 'pending',
+        reviewType: 'manual',
+        reason: '机审API不可用，等待人工审核',
+      });
       await this.videoRepo.update(videoId, { status: VideoStatus.BLOCKED });
 
       return { passed: false, reviewId };

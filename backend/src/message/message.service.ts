@@ -31,10 +31,16 @@ export class MessageService {
       });
       await this.convRepo.save(conversation);
     } else {
-      await this.convRepo.update(conversation.id, { lastMessageAt: new Date() });
+      await this.convRepo.update(conversation.id, {
+        lastMessageAt: new Date(),
+      });
     }
 
-    const message = this.msgRepo.create({ conversationId: conversation.id, senderId, content });
+    const message = this.msgRepo.create({
+      conversationId: conversation.id,
+      senderId,
+      content,
+    });
     await this.msgRepo.save(message);
 
     return this.msgRepo.findOne({
@@ -45,27 +51,40 @@ export class MessageService {
 
   async getConversations(userId: string) {
     const conversations = await this.convRepo.find({
-      where: [
-        { participant1Id: userId },
-        { participant2Id: userId },
-      ],
+      where: [{ participant1Id: userId }, { participant2Id: userId }],
       relations: ['participant1', 'participant2'],
       order: { lastMessageAt: 'DESC' },
     });
 
     if (conversations.length === 0) return [];
 
-    // Fetch last message for each conversation
+    // Use PostgreSQL DISTINCT ON to fetch only the latest message per conversation
     const convIds = conversations.map((c) => c.id);
-    const allMsgs = await this.msgRepo.find({
-      where: convIds.map((id) => ({ conversationId: id })),
-      order: { createdAt: 'DESC' },
-    });
-    const lastMsgMap = new Map<string, Message>();
-    for (const msg of allMsgs) {
-      if (!lastMsgMap.has(msg.conversationId)) {
-        lastMsgMap.set(msg.conversationId, msg);
-      }
+    const latestRows: any[] = await this.msgRepo.query(
+      `SELECT DISTINCT ON (m."conversationId") m.*, u."username" AS "sender_username", u."nickname" AS "sender_nickname", u."avatar" AS "sender_avatar"
+       FROM messages m
+       LEFT JOIN users u ON u.id = m."senderId"
+       WHERE m."conversationId" = ANY($1)
+       ORDER BY m."conversationId", m."createdAt" DESC`,
+      [convIds],
+    );
+
+    const lastMsgMap = new Map<string, any>();
+    for (const row of latestRows) {
+      lastMsgMap.set(row.conversationId, {
+        id: row.id,
+        conversationId: row.conversationId,
+        senderId: row.senderId,
+        content: row.content,
+        readAt: row.readAt,
+        createdAt: row.createdAt,
+        sender: {
+          id: row.senderId,
+          username: row.sender_username,
+          nickname: row.sender_nickname,
+          avatar: row.sender_avatar,
+        },
+      });
     }
 
     return conversations.map((conv) => ({
@@ -77,7 +96,12 @@ export class MessageService {
     }));
   }
 
-  async getMessages(conversationId: string, userId: string, page: number = 1, limit: number = 50) {
+  async getMessages(
+    conversationId: string,
+    userId: string,
+    page: number = 1,
+    limit: number = 50,
+  ) {
     const [items, total] = await this.msgRepo.findAndCount({
       where: { conversationId },
       relations: ['sender'],
@@ -94,7 +118,13 @@ export class MessageService {
       await this.msgRepo.update(unreadIds, { readAt: new Date() });
     }
 
-    return { items: items.reverse(), total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      items: items.reverse(),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async markRead(conversationId: string, userId: string) {

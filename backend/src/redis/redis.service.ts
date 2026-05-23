@@ -47,7 +47,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.zAdd(key, { score, value });
   }
 
-  async zRangeWithScores(key: string, start: number, end: number, options?: { REV: boolean }) {
+  async zRangeWithScores(
+    key: string,
+    start: number,
+    end: number,
+    options?: { REV: boolean },
+  ) {
     return this.client.zRangeWithScores(key, start, end, options);
   }
 

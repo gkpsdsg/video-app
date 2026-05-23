@@ -34,7 +34,9 @@ export class TranscodeProcessor {
       video.status = VideoStatus.TRANSCODING;
       await this.videoRepo.save(video);
 
-      const downloadUrl = await this.minioService.getFileUrl(video.minioObjectName);
+      const downloadUrl = await this.minioService.getFileUrl(
+        video.minioObjectName,
+      );
       const response = await fetch(downloadUrl);
       const buffer = Buffer.from(await response.arrayBuffer());
       await fs.writeFile(inputPath, buffer);
@@ -52,7 +54,11 @@ export class TranscodeProcessor {
       );
 
       const outputBuffer = await fs.readFile(outputPath);
-      await this.minioService.uploadFile(outputBuffer, video.minioObjectName, 'video/mp4');
+      await this.minioService.uploadFile(
+        outputBuffer,
+        video.minioObjectName,
+        'video/mp4',
+      );
 
       const coverBuffer = await fs.readFile(coverPath);
       const coverName = `covers/${videoId}.jpg`;
@@ -69,9 +75,13 @@ export class TranscodeProcessor {
       console.error(`视频 ${videoId} 转码失败:`, error);
       throw error;
     } finally {
-      await Promise.all([inputPath, outputPath, coverPath].map(async (p) => {
-        try { await fs.unlink(p); } catch (_) {}
-      }));
+      await Promise.all(
+        [inputPath, outputPath, coverPath].map(async (p) => {
+          try {
+            await fs.unlink(p);
+          } catch (_) {}
+        }),
+      );
     }
   }
 }

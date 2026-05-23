@@ -1,10 +1,19 @@
-import { Controller, Get, Put, Param, Query, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { User } from './user.entity';
-import { Video, VideoStatus } from '../video/video.entity';
+import { Video, VideoStatus, VideoVisibility } from '../video/video.entity';
 import { Follow } from '../social/follow.entity';
 
 @ApiTags('用户')
@@ -22,16 +31,19 @@ export class UserController {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) return null;
 
-    const [videoCount, totalLikesResult, followerCount, followingCount] = await Promise.all([
-      this.videoRepo.count({ where: { authorId: id, status: VideoStatus.READY } }),
-      this.videoRepo
-        .createQueryBuilder('video')
-        .select('COALESCE(SUM(video.likeCount), 0)', 'total')
-        .where('video.authorId = :id', { id })
-        .getRawOne(),
-      this.followRepo.count({ where: { followingId: id } }),
-      this.followRepo.count({ where: { followerId: id } }),
-    ]);
+    const [videoCount, totalLikesResult, followerCount, followingCount] =
+      await Promise.all([
+        this.videoRepo.count({
+          where: { authorId: id, status: VideoStatus.READY },
+        }),
+        this.videoRepo
+          .createQueryBuilder('video')
+          .select('COALESCE(SUM(video.likeCount), 0)', 'total')
+          .where('video.authorId = :id', { id })
+          .getRawOne(),
+        this.followRepo.count({ where: { followingId: id } }),
+        this.followRepo.count({ where: { followerId: id } }),
+      ]);
 
     return {
       id: user.id,
@@ -47,14 +59,22 @@ export class UserController {
   }
 
   @Get(':id/videos')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: '获取用户的视频列表' })
   async getUserVideos(
     @Param('id') id: string,
+    @Req() req: any,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20,
   ) {
+    const where: any = { authorId: id, status: VideoStatus.READY };
+    // Show private videos only to the owner
+    if (req.user?.id !== id) {
+      where.visibility = VideoVisibility.PUBLIC;
+    }
     const [items, total] = await this.videoRepo.findAndCount({
-      where: { authorId: id, status: VideoStatus.READY },
+      where,
       relations: ['author'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,

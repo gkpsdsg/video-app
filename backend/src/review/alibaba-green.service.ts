@@ -11,12 +11,19 @@ export class AlibabaGreenService {
   private endpoint: string;
 
   constructor(private configService: ConfigService) {
-    this.accessKeyId = configService.get<string>('ALIBABA_CLOUD_ACCESS_KEY_ID') || '';
-    this.accessKeySecret = configService.get<string>('ALIBABA_CLOUD_ACCESS_KEY_SECRET') || '';
+    this.accessKeyId =
+      configService.get<string>('ALIBABA_CLOUD_ACCESS_KEY_ID') || '';
+    this.accessKeySecret =
+      configService.get<string>('ALIBABA_CLOUD_ACCESS_KEY_SECRET') || '';
     this.endpoint = 'https://green-cip.cn-shanghai.aliyuncs.com';
   }
 
-  private sign(method: string, path: string, query: Record<string, string>, body: string): Record<string, string> {
+  private sign(
+    method: string,
+    path: string,
+    query: Record<string, string>,
+    body: string,
+  ): Record<string, string> {
     const nonce = uuidv4();
     const timestamp = new Date().toISOString();
     const params: Record<string, string> = {
@@ -30,7 +37,9 @@ export class AlibabaGreenService {
     };
 
     const sortedKeys = Object.keys(params).sort();
-    const canonicalizedQuery = sortedKeys.map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
+    const canonicalizedQuery = sortedKeys
+      .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+      .join('&');
 
     const stringToSign = `${method}&${encodeURIComponent(path)}&${encodeURIComponent(canonicalizedQuery)}`;
 
@@ -43,7 +52,10 @@ export class AlibabaGreenService {
     return params;
   }
 
-  async videoAsyncScan(videoUrl: string, dataId?: string): Promise<{ taskId: string; dataId: string }> {
+  async videoAsyncScan(
+    videoUrl: string,
+    dataId?: string,
+  ): Promise<{ taskId: string; dataId: string }> {
     const body = JSON.stringify({
       scenes: ['porn', 'terrorism'],
       tasks: [
@@ -54,31 +66,51 @@ export class AlibabaGreenService {
       ],
     });
 
-    const params = this.sign('POST', '/green/video/asyncscan', { Action: 'VideoAsyncScan' }, body);
+    const params = this.sign(
+      'POST',
+      '/green/video/asyncscan',
+      { Action: 'VideoAsyncScan' },
+      body,
+    );
     const queryString = Object.entries(params)
       .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
       .join('&');
 
-    const res = await axios.post(`${this.endpoint}/green/video/asyncscan?${queryString}`, body, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 30000,
-    });
+    const res = await axios.post(
+      `${this.endpoint}/green/video/asyncscan?${queryString}`,
+      body,
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000,
+      },
+    );
 
     const task = res.data?.data?.[0];
     return { taskId: task?.taskId || '', dataId: task?.dataId || '' };
   }
 
-  async getVideoResults(taskId: string): Promise<{ passed: boolean; reason: string }> {
+  async getVideoResults(
+    taskId: string,
+  ): Promise<{ passed: boolean; reason: string }> {
     const body = JSON.stringify({ taskIds: [taskId] });
-    const params = this.sign('POST', '/green/video/results', { Action: 'VideoResults' }, body);
+    const params = this.sign(
+      'POST',
+      '/green/video/results',
+      { Action: 'VideoResults' },
+      body,
+    );
     const queryString = Object.entries(params)
       .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
       .join('&');
 
-    const res = await axios.post(`${this.endpoint}/green/video/results?${queryString}`, body, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 30000,
-    });
+    const res = await axios.post(
+      `${this.endpoint}/green/video/results?${queryString}`,
+      body,
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000,
+      },
+    );
 
     const result = res.data?.data?.[0];
     if (!result) return { passed: true, reason: '无结果' };
@@ -86,8 +118,15 @@ export class AlibabaGreenService {
     if (result.code === 200) {
       const suggestion = result.results?.[0]?.suggestion;
       if (suggestion === 'pass') return { passed: true, reason: '机审通过' };
-      if (suggestion === 'block') return { passed: false, reason: result.results?.[0]?.label || '内容违规' };
-      return { passed: false, reason: result.results?.[0]?.label || '审核未通过，需人工复审' };
+      if (suggestion === 'block')
+        return {
+          passed: false,
+          reason: result.results?.[0]?.label || '内容违规',
+        };
+      return {
+        passed: false,
+        reason: result.results?.[0]?.label || '审核未通过，需人工复审',
+      };
     }
 
     return { passed: false, reason: result.message || '审核失败' };

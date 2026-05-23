@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
-import 'package:provider/provider.dart';
 import '../services/api_service.dart';
-import '../providers/auth_provider.dart';
 import '../widgets/shimmer_box.dart';
 import '../widgets/douyin_top_bar.dart';
 import '../widgets/douyin_action_bar.dart';
@@ -43,10 +41,10 @@ class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key, this.initialVideos, this.initialIndex = 0});
 
   @override
-  State<FeedScreen> createState() => _FeedScreenState();
+  State<FeedScreen> createState() => FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class FeedScreenState extends State<FeedScreen> {
   late final PageController _pageController;
   final _api = ApiService();
   List<VideoItem> _videos = [];
@@ -55,6 +53,7 @@ class _FeedScreenState extends State<FeedScreen> {
   String? _loadError;
   bool _isPlaying = true;
   final Map<String, GlobalKey<_VideoPlayerWidgetState>> _videoKeys = {};
+  final Map<String, Map<String, dynamic>> _batchStatus = {};
 
   // Top bar state
   int _feedTabIndex = 1; // 0=关注, 1=推荐
@@ -67,10 +66,51 @@ class _FeedScreenState extends State<FeedScreen> {
       _currentPage = widget.initialIndex.clamp(0, _videos.length - 1);
       _pageController = PageController(initialPage: _currentPage);
       _isLoading = false;
+      _fetchBatchStatus();
     } else {
       _pageController = PageController();
       _fetchVideos();
     }
+  }
+
+  Future<void> _fetchBatchStatus() async {
+    if (_videos.isEmpty) return;
+    try {
+      final videoIds = _videos.map((v) => v.id).toList();
+      final res = await _api.dio.post('/batch-status', data: {'videoIds': videoIds});
+      final data = res.data as Map<String, dynamic>;
+      final likesSrc = data['likes'];
+      final likes = likesSrc is Map ? Map<String, bool>.from(likesSrc.map((k, v) => MapEntry(k.toString(), v == true))) : <String, bool>{};
+      final bookmarksSrc = data['bookmarks'];
+      final bookmarks = bookmarksSrc is Map ? Map<String, bool>.from(bookmarksSrc.map((k, v) => MapEntry(k.toString(), v == true))) : <String, bool>{};
+      final countsSrc = data['bookmarkCounts'];
+      final counts = countsSrc is Map ? Map<String, int>.from(countsSrc.map((k, v) => MapEntry(k.toString(), (v as num).toInt()))) : <String, int>{};
+      final followsSrc = data['follows'];
+      final follows = followsSrc is Map ? Map<String, bool>.from(followsSrc.map((k, v) => MapEntry(k.toString(), v == true))) : <String, bool>{};
+      final authorsSrc = data['videoAuthorMap'];
+      final videoAuthors = authorsSrc is Map ? Map<String, String>.from(authorsSrc.map((k, v) => MapEntry(k.toString(), v.toString()))) : <String, String>{};
+      final likeCountsSrc = data['likeCounts'];
+      final likeCounts = likeCountsSrc is Map ? Map<String, int>.from(likeCountsSrc.map((k, v) => MapEntry(k.toString(), (v as num).toInt()))) : <String, int>{};
+      final commentCountsSrc = data['commentCounts'];
+      final commentCounts = commentCountsSrc is Map ? Map<String, int>.from(commentCountsSrc.map((k, v) => MapEntry(k.toString(), (v as num).toInt()))) : <String, int>{};
+
+      if (mounted) {
+        setState(() {
+          _batchStatus.clear();
+          for (final v in _videos) {
+            final authorId = videoAuthors[v.id] ?? v.author['id']?.toString() ?? '';
+            _batchStatus[v.id] = {
+              'isLiked': likes[v.id] ?? false,
+              'isBookmarked': bookmarks[v.id] ?? false,
+              'bookmarkCount': counts[v.id] ?? 0,
+              'isFollowing': follows[authorId] ?? false,
+              'likeCount': likeCounts[v.id] ?? v.likeCount,
+              'commentCount': commentCounts[v.id] ?? v.commentCount,
+            };
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -98,6 +138,7 @@ class _FeedScreenState extends State<FeedScreen> {
           _videos = items;
           _isLoading = false;
         });
+        _fetchBatchStatus();
       }
     } catch (e) {
       if (mounted) {
@@ -107,6 +148,10 @@ class _FeedScreenState extends State<FeedScreen> {
         });
       }
     }
+  }
+
+  void refreshBatchStatus() {
+    _fetchBatchStatus();
   }
 
   void _onTabChanged(int index) {
@@ -125,18 +170,6 @@ class _FeedScreenState extends State<FeedScreen> {
     if (_isPlaying != isPlaying) {
       setState(() => _isPlaying = isPlaying);
     }
-  }
-
-  void _onVideoDeleted(String videoId) {
-    final idx = _videos.indexWhere((v) => v.id == videoId);
-    if (idx < 0) return;
-    setState(() {
-      _videos.removeAt(idx);
-      _videoKeys.remove(videoId);
-      if (_currentPage >= _videos.length) {
-        _currentPage = (_videos.length - 1).clamp(0, _videos.length);
-      }
-    });
   }
 
   void _togglePlayPause() {
@@ -210,7 +243,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 isCurrent: index == _currentPage,
                 isGloballyPlaying: _isPlaying,
                 onPlayPauseChanged: _onPlayPauseChanged,
-                onVideoDeleted: () => _onVideoDeleted(vId),
+                statusInfo: _batchStatus[vId],
               );
             },
           ),
@@ -310,14 +343,14 @@ class _VideoPlayerWidget extends StatefulWidget {
   final bool isCurrent;
   final bool isGloballyPlaying;
   final ValueChanged<bool> onPlayPauseChanged;
-  final VoidCallback? onVideoDeleted;
+  final Map<String, dynamic>? statusInfo;
 
   const _VideoPlayerWidget({
     required this.video,
     required this.isCurrent,
     required this.isGloballyPlaying,
     required this.onPlayPauseChanged,
-    this.onVideoDeleted,
+    this.statusInfo,
     super.key,
   });
 
@@ -339,8 +372,6 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
   int _bookmarkCount = 0;
   bool _isFollowing = false;
   bool _bookmarkLoading = false;
-  bool _isAdmin = false;
-  bool _isAuthor = false;
   Widget? _heartBurst;
 
   @override
@@ -348,13 +379,22 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     super.initState();
     _likeCount = widget.video.likeCount;
     _commentCount = widget.video.commentCount;
-    final auth = context.read<AuthProvider>();
-    _isAdmin = auth.user?['role'] == 'admin';
-    _isAuthor = auth.user?['id']?.toString() == widget.video.author['id']?.toString();
-    _checkLikeStatus();
-    _checkBookmarkStatus();
-    _fetchBookmarkCount();
-    _checkFollowStatus();
+
+    // Use batch-loaded status if available, otherwise fall back to individual queries
+    final s = widget.statusInfo;
+    if (s != null) {
+      _isLiked = s['isLiked'] as bool? ?? false;
+      _isBookmarked = s['isBookmarked'] as bool? ?? false;
+      _bookmarkCount = s['bookmarkCount'] as int? ?? 0;
+      _isFollowing = s['isFollowing'] as bool? ?? false;
+      _likeCount = s['likeCount'] as int? ?? _likeCount;
+      _commentCount = s['commentCount'] as int? ?? _commentCount;
+    } else {
+      _checkLikeStatus();
+      _checkBookmarkStatus();
+      _fetchBookmarkCount();
+      _checkFollowStatus();
+    }
     if (widget.isCurrent) _initVideo();
   }
 
@@ -369,6 +409,21 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
       }
     } else if (!widget.isCurrent && oldWidget.isCurrent) {
       _controller?.pause();
+    }
+
+    // When batch status refreshes, sync the counts from it
+    final s = widget.statusInfo;
+    if (s != null) {
+      if (mounted) {
+        setState(() {
+          _isLiked = s['isLiked'] as bool? ?? _isLiked;
+          _isBookmarked = s['isBookmarked'] as bool? ?? _isBookmarked;
+          _bookmarkCount = s['bookmarkCount'] as int? ?? _bookmarkCount;
+          _isFollowing = s['isFollowing'] as bool? ?? _isFollowing;
+          _likeCount = s['likeCount'] as int? ?? _likeCount;
+          _commentCount = s['commentCount'] as int? ?? _commentCount;
+        });
+      }
     }
   }
 
@@ -467,42 +522,6 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
         ),
       ),
     );
-  }
-
-  Future<void> _deleteVideo() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161616),
-        title: const Text('删除视频', style: TextStyle(color: Colors.white)),
-        content: Text('确定要删除「${widget.video.title}」吗？\n此操作不可撤销。',
-            style: const TextStyle(color: Color(0xFF8A8A8A))),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除', style: TextStyle(color: Color(0xFFFE2C55))),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    try {
-      await ApiService().dio.delete('/video/${widget.video.id}');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('视频已删除'), behavior: SnackBarBehavior.floating),
-        );
-        widget.onVideoDeleted?.call();
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('删除失败'), behavior: SnackBarBehavior.floating),
-        );
-      }
-    }
   }
 
   Future<void> _initVideo() async {
@@ -655,10 +674,75 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     );
   }
 
-  void _share() {
-    Clipboard.setData(ClipboardData(text: 'video://${widget.video.id}'));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('视频链接已复制'), behavior: SnackBarBehavior.floating),
+  void _showShareSheet() {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        decoration: const BoxDecoration(
+          color: _dkS1,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(color: _dkBorder, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 20),
+              const Text('分享到', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _ShareOption(icon: Icons.chat_bubble_rounded, label: '私信', color: const Color(0xFF8B5CF6), onTap: () {
+                    Navigator.pop(ctx);
+                    _messageAuthor();
+                  }),
+                  _ShareOption(icon: Icons.link, label: '复制链接', color: const Color(0xFF06B6D4), onTap: () {
+                    Navigator.pop(ctx);
+                    Clipboard.setData(ClipboardData(text: 'video://${widget.video.id}'));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('视频链接已复制'), behavior: SnackBarBehavior.floating),
+                    );
+                  }),
+                  _ShareOption(icon: Icons.download, label: '保存', color: const Color(0xFF22C55E), onTap: () {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('功能开发中'), behavior: SnackBarBehavior.floating),
+                    );
+                  }),
+                  _ShareOption(icon: Icons.report, label: '举报', color: const Color(0xFFF59E0B), onTap: () {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('已收到举报'), behavior: SnackBarBehavior.floating),
+                    );
+                  }),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    backgroundColor: _dkS2,
+                    foregroundColor: _textMuted,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('取消', style: TextStyle(fontSize: 15)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -826,27 +910,6 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
                       ),
                     ],
                   ),
-                  if (_isAdmin || _isAuthor) ...[
-                    const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: _deleteVideo,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _red,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.delete, color: Colors.white, size: 18),
-                            SizedBox(width: 6),
-                            Text('删除此视频', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    ],
                   const SizedBox(height: 8),
                   Text(video.title,
                       style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
@@ -878,7 +941,8 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
                 onLike: _toggleLike,
                 onComment: _showCommentSheet,
                 onBookmark: _toggleBookmark,
-                onShare: _share,
+                onShare: _showShareSheet,
+                onFollow: _toggleFollow,
               ),
             ),
 
@@ -1301,4 +1365,35 @@ class _FlatComment {
   final Map<String, dynamic> data;
   final int depth;
   const _FlatComment({required this.data, required this.depth});
+}
+
+class _ShareOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ShareOption({required this.icon, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 52, height: 52,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: color, size: 26),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(color: _textSecondary, fontSize: 11)),
+        ],
+      ),
+    );
+  }
 }

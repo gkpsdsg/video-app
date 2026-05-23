@@ -1,4 +1,13 @@
-import { Controller, Post, Get, Param, Query, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { MessageService } from './message.service';
@@ -34,7 +43,12 @@ export class MessageController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 50,
   ) {
-    return this.messageService.getMessages(conversationId, req.user.id, +page, +limit);
+    return this.messageService.getMessages(
+      conversationId,
+      req.user.id,
+      +page,
+      +limit,
+    );
   }
 
   @Post('message/:conversationId/read')

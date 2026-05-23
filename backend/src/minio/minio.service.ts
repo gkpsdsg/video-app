@@ -12,10 +12,13 @@ export class MinioService implements OnModuleInit {
   }
 
   onModuleInit() {
-    const endPoint = this.configService.get<string>('MINIO_ENDPOINT') || 'localhost';
+    const endPoint =
+      this.configService.get<string>('MINIO_ENDPOINT') || 'localhost';
     const port = this.configService.get<number>('MINIO_PORT') || 9000;
-    const accessKey = this.configService.get<string>('MINIO_ACCESS_KEY') || 'minioadmin';
-    const secretKey = this.configService.get<string>('MINIO_SECRET_KEY') || 'minioadmin';
+    const accessKey =
+      this.configService.get<string>('MINIO_ACCESS_KEY') || 'minioadmin';
+    const secretKey =
+      this.configService.get<string>('MINIO_SECRET_KEY') || 'minioadmin';
 
     this.minioClient = new Minio.Client({
       endPoint,

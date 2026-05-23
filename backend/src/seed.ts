@@ -12,17 +12,51 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Public domain short test videos
 const TEST_VIDEOS = [
-  { title: '海浪拍岸·治愈系海景', url: 'https://www.w3schools.com/html/mov_bbb.mp4' },
-  { title: '城市夜景延时摄影', url: 'https://sample-videos.com/video321/mp4/240/big_buck_bunny_240p_1mb.mp4' },
-  { title: '森林小溪·自然白噪音', url: 'https://files.testfile.org/Video%20MP4%2050MB-1.mp4' },
+  {
+    title: '海浪拍岸·治愈系海景',
+    url: 'https://www.w3schools.com/html/mov_bbb.mp4',
+  },
+  {
+    title: '城市夜景延时摄影',
+    url: 'https://sample-videos.com/video321/mp4/240/big_buck_bunny_240p_1mb.mp4',
+  },
+  {
+    title: '森林小溪·自然白噪音',
+    url: 'https://files.testfile.org/Video%20MP4%2050MB-1.mp4',
+  },
 ];
 
 const TEST_USERS = [
-  { username: 'admin', password: 'admin123', nickname: '管理员', role: 'admin' },
-  { username: 'traveler', password: '123456', nickname: '旅行者小A', role: 'user' },
-  { username: 'foodie', password: '123456', nickname: '美食探店家', role: 'user' },
-  { username: 'musician', password: '123456', nickname: '音乐达人', role: 'user' },
-  { username: 'athlete', password: '123456', nickname: '运动健身', role: 'user' },
+  {
+    username: 'admin',
+    password: 'admin123',
+    nickname: '管理员',
+    role: 'admin',
+  },
+  {
+    username: 'traveler',
+    password: '123456',
+    nickname: '旅行者小A',
+    role: 'user',
+  },
+  {
+    username: 'foodie',
+    password: '123456',
+    nickname: '美食探店家',
+    role: 'user',
+  },
+  {
+    username: 'musician',
+    password: '123456',
+    nickname: '音乐达人',
+    role: 'user',
+  },
+  {
+    username: 'athlete',
+    password: '123456',
+    nickname: '运动健身',
+    role: 'user',
+  },
   { username: 'geek', password: '123456', nickname: '科技极客', role: 'user' },
 ];
 
@@ -30,7 +64,12 @@ function downloadFile(url: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     console.log(`  ↓ Downloading: ${url.split('/').pop()} ...`);
     get(url, (res) => {
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+      if (
+        res.statusCode &&
+        res.statusCode >= 300 &&
+        res.statusCode < 400 &&
+        res.headers.location
+      ) {
         return resolve(downloadFile(res.headers.location));
       }
       if (res.statusCode !== 200) {
@@ -60,7 +99,9 @@ async function bootstrap() {
   for (const u of TEST_USERS) {
     try {
       await authService.register(u);
-      const created = await userRepo.findOne({ where: { username: u.username } });
+      const created = await userRepo.findOne({
+        where: { username: u.username },
+      });
       if (created) {
         if (u.role === 'admin') {
           created.role = 'admin';
@@ -68,9 +109,13 @@ async function bootstrap() {
         }
         users.push(created);
       }
-      console.log(`  ✓ ${u.nickname} (@${u.username})${u.role === 'admin' ? ' ⚡admin' : ''}`);
+      console.log(
+        `  ✓ ${u.nickname} (@${u.username})${u.role === 'admin' ? ' ⚡admin' : ''}`,
+      );
     } catch {
-      const existing = await userRepo.findOne({ where: { username: u.username } });
+      const existing = await userRepo.findOne({
+        where: { username: u.username },
+      });
       if (existing) {
         users.push(existing);
         console.log(`  • ${u.nickname} (@${u.username}) — already exists`);
@@ -107,7 +152,9 @@ async function bootstrap() {
       });
       await videoRepo.save(video);
       createdVideos.push(video);
-      console.log(`  ✓ "${cfg.title}" by @${user.username} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`);
+      console.log(
+        `  ✓ "${cfg.title}" by @${user.username} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`,
+      );
       videoCount++;
     } catch (e: any) {
       console.log(`  ✗ @${user.username}: ${e.message}`);
@@ -170,16 +217,27 @@ async function bootstrap() {
     for (const user of users) {
       if (user.id === video.authorId) continue;
       if (Math.random() > 0.5) {
-        const content = commentTexts[Math.floor(Math.random() * commentTexts.length)];
+        const content =
+          commentTexts[Math.floor(Math.random() * commentTexts.length)];
         try {
-          const comment = await socialService.addComment(video.id, user.id, content);
+          const comment = await socialService.addComment(
+            video.id,
+            user.id,
+            content,
+          );
           if (!comment) continue;
           commentCount++;
 
           // Video author replies to some comments
           if (Math.random() > 0.4) {
-            const reply = replyTexts[Math.floor(Math.random() * replyTexts.length)];
-            await socialService.addComment(video.id, video.authorId, reply, comment.id);
+            const reply =
+              replyTexts[Math.floor(Math.random() * replyTexts.length)];
+            await socialService.addComment(
+              video.id,
+              video.authorId,
+              reply,
+              comment.id,
+            );
             commentCount++;
           }
         } catch {}
@@ -198,7 +256,9 @@ async function bootstrap() {
   console.log('  ✓ Stats updated');
 
   console.log(`\n✅ Seed complete!`);
-  console.log(`   ${users.length} users, ${videoCount} videos, ${likeCount} likes, ${commentCount} comments`);
+  console.log(
+    `   ${users.length} users, ${videoCount} videos, ${likeCount} likes, ${commentCount} comments`,
+  );
   console.log(`   Login: any @username above, password: 123456\n`);
 
   await app.close();

@@ -193,10 +193,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  final _feedKey = GlobalKey<FeedScreenState>();
   final _profileKey = GlobalKey<ProfileScreenState>();
 
   late final _pages = [
-    const FeedScreen(),
+    FeedScreen(key: _feedKey),
     const FriendsScreen(),
     const SizedBox(),
     const MessagesScreen(),
@@ -223,10 +224,13 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.of(context).pushNamed('/upload').then((_) {});
               return;
             }
+            setState(() => _currentIndex = i);
+            if (i == 0) {
+              _feedKey.currentState?.refreshBatchStatus();
+            }
             if (i == 4) {
               _profileKey.currentState?.refreshCurrentTab();
             }
-            setState(() => _currentIndex = i);
           },
           items: List.generate(5, (i) {
             final tab = _navTabs[i];

@@ -42,7 +42,13 @@ export class SearchService {
       .where('user.username ILIKE :keyword OR user.nickname ILIKE :keyword', {
         keyword: `%${keyword.trim()}%`,
       })
-      .select(['user.id', 'user.username', 'user.nickname', 'user.avatar', 'user.createdAt'])
+      .select([
+        'user.id',
+        'user.username',
+        'user.nickname',
+        'user.avatar',
+        'user.createdAt',
+      ])
       .orderBy('user.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
