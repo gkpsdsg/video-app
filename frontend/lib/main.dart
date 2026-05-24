@@ -148,7 +148,7 @@ class _NavTab {
 
 void main() {
   final apiService = ApiService();
-  final baseUrl = kIsWeb ? 'http://localhost:3000' : 'http://10.198.238.77:3000';
+  final baseUrl = kIsWeb ? 'http://localhost:3000' : 'http://172.29.255.221:3000';
   apiService.init(baseUrl: baseUrl);
   runApp(const MyApp());
 }

@@ -24,5 +24,6 @@ async function bootstrap() {
   console.log(`App running at http://localhost:${port}`);
   console.log(`Swagger docs at http://localhost:${port}/api`);
   console.log(`MinIO endpoint: ${process.env.MINIO_ENDPOINT ?? 'localhost'}:${process.env.MINIO_PORT ?? 9000}`);
+  console.log(`Backend boot at ${new Date().toISOString()}`);
 }
 bootstrap();
